@@ -1,0 +1,23 @@
+{
+  "name": "phpoo/app",
+  "description": "Projeto do curso de PHP-OO",
+  "minimum-stability": "stable",
+  "license": "proprietary",
+  "authors": [
+    {
+      "name": "Alexandre Beilner",
+      "email": "alexandre.beilner@ixcsoft.com.br"
+    }
+  ],
+  "require": {
+    "php": ">=7.4 <8.5",
+    "ext-pdo": "*",
+    "php-di/php-di": "^6.4",
+    "doctrine/dbal": "^3.10"
+  },
+  "autoload": {
+    "psr-4": {
+      "App\\": "src/"
+    }
+  }
+}

@@ -2,24 +2,25 @@
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/../vendor/autoload.php';
+require __DIR__ . '/../vendor/autoload.php';
 
-use App\App;
-use App\Service\IndexServiceInterface;
+use App\Application\Impl\ApiApplication;
+use Nyholm\Psr7\Factory\Psr17Factory;
+use Nyholm\Psr7Server\ServerRequestCreator;
 
-$app = App::getInstance();
-$container = $app->container();
+// Criar aplicação Slim
+$app = ApiApplication::getInstance()->createSlimApp();
 
-$indexService = $container->get(IndexServiceInterface::class);
+// Criar ServerRequest usando Nyholm PSR-7
+$psr17Factory = new Psr17Factory();
+$creator = new ServerRequestCreator(
+    $psr17Factory, // ServerRequestFactory
+    $psr17Factory, // UriFactory
+    $psr17Factory, // UploadedFileFactory
+    $psr17Factory  // StreamFactory
+);
 
-echo $indexService->welcomeMessage() . '<br />';
-echo $indexService->phpVersion() . '<br />';
+$request = $creator->fromGlobals();
 
-$sessionInfo = $indexService->sessionInfo();
-echo 'Session ID: ' . $sessionInfo['session_id'] . '<br />';
-
-if ($sessionInfo['random_number']) {
-    echo 'Valor salvo na sessão: ' . $sessionInfo['random_number'];
-} else {
-    echo 'Não existe valor na sessão';
-}
+// Executar aplicação
+$app->run($request);

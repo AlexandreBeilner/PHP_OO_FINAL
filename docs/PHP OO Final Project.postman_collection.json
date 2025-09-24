@@ -364,6 +364,27 @@
 						}
 					},
 					"response": []
+				},
+				{
+					"name": "Extensions Status",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8080/api/system/extensions-status",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8080",
+							"path": [
+								"api",
+								"system",
+								"extensions-status"
+							]
+						}
+					},
+					"response": []
 				}
 			]
 		}

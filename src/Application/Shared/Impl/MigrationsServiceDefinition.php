@@ -6,6 +6,7 @@ namespace App\Application\Shared\Impl;
 
 use App\Application\Shared\ServiceDefinitionInterface;
 use App\Infrastructure\Common\Database\DoctrineEntityManagerInterface;
+use App\Application\Shared\Utils\Impl\ProjectRootDiscovery;
 use DI\ContainerBuilder;
 use Doctrine\Migrations\Configuration\Connection\ExistingConnection;
 use Doctrine\Migrations\Configuration\Migration\ConfigurationArray;
@@ -27,7 +28,7 @@ final class MigrationsServiceDefinition implements ServiceDefinitionInterface
                 'executed_at_column_name' => 'executed_at',
             ],
             'migrations_paths' => [
-                'App\\Infrastructure\\Common\\Database\\Migrations' => self::getProjectRoot() . '/src/Infrastructure/Common/Database/Migrations',
+                'App\\Infrastructure\\Common\\Database\\Migrations' => ProjectRootDiscovery::getProjectRoot() . '/src/Infrastructure/Common/Database/Migrations',
             ],
             'all_or_nothing' => true,
             'check_database_platform' => true,
@@ -49,25 +50,6 @@ final class MigrationsServiceDefinition implements ServiceDefinitionInterface
         $connectionLoader = new ExistingConnection($entityManager->getConnection());
         
         return DependencyFactory::fromConnection($configuration, $connectionLoader);
-    }
-
-    private static function getProjectRoot(): string
-    {
-        $currentDir = __DIR__;
-        
-        while ($currentDir !== '/' && !empty($currentDir)) {
-            if (file_exists($currentDir . '/composer.json')) {
-                return $currentDir;
-            }
-            $currentDir = dirname($currentDir);
-        }
-        
-        $cwd = getcwd();
-        if ($cwd && file_exists($cwd . '/composer.json')) {
-            return $cwd;
-        }
-        
-        throw new \RuntimeException('Não foi possível encontrar o diretório raiz do projeto');
     }
 
     public function register(ContainerBuilder $builder): void

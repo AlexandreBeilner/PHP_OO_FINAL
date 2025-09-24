@@ -1,0 +1,901 @@
+= Guia de Implementação: CRUD de Produtos
+:doctype: article
+:encoding: utf-8
+:lang: pt-BR
+:toc: left
+:toclevels: 3
+:numbered:
+:source-highlighter: coderay
+:icons: font
+
+== Visão Geral
+
+Este documento apresenta um **passo a passo detalhado** para implementação de um CRUD completo de produtos, seguindo exatamente os mesmos padrões arquiteturais utilizados no módulo de usuários existente.
+
+[IMPORTANT]
+====
+**Para Iniciantes**: Este guia é **conceitual** e **educativo**. Não contém código específico, mas sim os passos e conceitos necessários para implementar cada componente. O foco está no **processo de pensamento** e na **estrutura arquitetural**.
+====
+
+=== Objetivos do Guia
+
+- ✅ **Replicar padrões** existentes na aplicação
+- ✅ **Consolidar aprendizado** através da prática
+- ✅ **Implementar Clean Architecture** e **DDD**
+- ✅ **Seguir Object Calisthenics** e **SOLID**
+- ✅ **Criar API REST** padronizada
+
+=== Como Usar Este Guia
+
+[TIP]
+====
+**Para Iniciantes**:
+1. **Leia cada fase completamente** antes de começar a implementar
+2. **Compare sempre com o módulo Users** existente como referência
+3. **Implemente passo a passo**, não pule etapas
+4. **Teste cada componente** antes de passar para o próximo
+5. **Peça ajuda** se algum conceito não estiver claro
+====
+
+=== Campos do Produto
+
+[cols="3,2,5"]
+|===
+|Campo |Tipo |Descrição
+
+|*Campos Específicos*
+|
+|
+
+|`name` 
+|string 
+|Nome do produto
+
+|`price` 
+|float 
+|Preço do produto
+
+|`category` 
+|string 
+|Categoria do produto
+
+|*Campos Padrão*
+|
+|
+
+|`id` 
+|int 
+|Identificador único
+
+|`status` 
+|string 
+|Status: draft, active, inactive
+
+|`created_at` 
+|DateTime 
+|Data de criação
+
+|`updated_at` 
+|DateTime 
+|Data de atualização
+|===
+
+== FASE 1: Planejamento e Estrutura
+
+=== Passo 1.1: Definir Estrutura de Diretórios
+
+==== Domain Layer
+Criar estrutura base para o domínio de produtos:
+
+[NOTE]
+====
+A estrutura de diretórios segue o padrão DDD (Domain-Driven Design). Cada pasta tem um propósito específico na arquitetura.
+====
+
+```
+src/Domain/Products/
+├── Entities/
+│   ├── ProductEntityInterface.php
+│   └── Impl/
+│       └── ProductEntity.php
+├── Services/
+│   ├── ProductServiceInterface.php
+│   └── Impl/
+│       └── ProductService.php
+├── Repositories/
+│   ├── ProductRepositoryInterface.php
+│   └── Impl/
+│       └── ProductRepository.php
+├── DTOs/
+│   └── Impl/
+│       ├── CreateProductDataDTO.php
+│       └── UpdateProductDataDTO.php
+├── Commands/
+│   └── Impl/
+│       ├── CreateProductCommand.php
+│       └── UpdateProductCommand.php
+└── Validators/
+    ├── ProductDataValidatorInterface.php
+    └── Impl/
+        └── ProductDataValidator.php
+```
+
+==== Application Layer
+Criar estrutura para a camada de aplicação:
+
+```
+src/Application/Modules/Products/
+├── Controllers/
+│   ├── ProductControllerInterface.php
+│   └── Impl/
+│       └── ProductController.php
+├── Http/
+│   └── Routing/
+│       └── ProductsRouteProvider.php
+└── Bootstrap/
+    └── Impl/
+        ├── ProductsBootstrap.php
+        ├── ProductServiceDefinition.php
+        └── ProductControllerDefinition.php
+```
+
+=== Passo 1.2: Identificar Dependências
+
+==== Dependências Necessárias
+- **AbstractRepository**: Para herança do repositório base
+- **AbstractService**: Para herança do service base  
+- **AbstractBaseController**: Para herança do controller base
+- **AbstractBootstrap**: Para configuração do módulo
+- **ValidatorInterface**: Para validação de dados
+- **RouteProviderInterface**: Para roteamento
+- **Doctrine ORM**: Para persistência
+
+==== Interfaces a Implementar
+- ProductEntityInterface
+- ProductServiceInterface
+- ProductRepositoryInterface
+- ProductControllerInterface
+- ProductDataValidatorInterface
+
+== FASE 2: Camada de Domínio (Domain)
+
+=== Passo 2.1: Criar ProductEntity
+
+==== 2.1.1: Definir Interface
+Criar interface com métodos principais da entidade:
+
+**Métodos obrigatórios:**
+- Getters básicos (compatibilidade com ORM)
+- Métodos comportamentais (Tell Don't Ask)
+- Métodos de validação de regras de negócio
+- Serialização JSON
+
+==== 2.1.2: Implementar Classe ProductEntity
+**Características da implementação:**
+
+[cols="3,7"]
+|===
+|Aspecto |Implementação
+
+|*Propriedades* 
+|Públicas (Object Calisthenics), tipadas explicitamente
+
+|*Construtor* 
+|Recebe apenas campos obrigatórios, inicializa comportamentos
+
+|*Behaviors* 
+|Composição com TimestampableBehavior (se necessário)
+
+|*Métodos Comportamentais* 
+|activate(), deactivate(), updatePrice(), isActive(), canBeSold()
+
+|*Validações* 
+|Regras de negócio internas (preço > 0, categoria válida)
+
+|*Serialização* 
+|JsonSerializable para API responses
+|===
+
+**Métodos comportamentais sugeridos:**
+
+[TIP]
+====
+**Tell Don't Ask**: A entidade deve ter comportamentos (métodos que fazem algo) ao invés de apenas getters/setters. O cliente "pede para fazer" ao invés de "perguntar e decidir".
+====
+
+- `activate()` - Ativa o produto para venda
+- `deactivate()` - Desativa o produto (não pode ser vendido)  
+- `updatePrice()` - Atualiza preço com validação automática
+- `isActive()` - Verifica se o produto está ativo
+- `canBeSold()` - Verifica se pode ser vendido (ativo + estoque)
+- `isPriceValid()` - Valida se o preço é positivo
+- `belongsToCategory()` - Verifica se pertence a uma categoria
+
+=== Passo 2.2: Criar ProductRepository
+
+[NOTE]
+====
+**Repository Pattern**: O repositório abstrai o acesso aos dados. O service não precisa saber se os dados vêm do banco, arquivo, API, etc. O repositório "esconde" essa complexidade.
+====
+
+==== 2.2.1: Definir Interface
+Métodos específicos para produtos além dos padrão (CRUD básico):
+
+- `findByCategory()` - Buscar produtos por categoria
+- `findActiveProducts()` - Buscar apenas produtos ativos
+- `findByPriceRange()` - Buscar produtos em faixa de preço
+- `searchByName()` - Buscar produtos por nome
+
+==== 2.2.2: Implementar Repository
+**Herança:** O repositório vai estender o repositório base existente
+
+**O que precisa implementar:**
+- Definir qual entidade este repositório gerencia (ProductEntity)
+- Criar métodos específicos para consultas de produtos
+- Implementar filtros e buscas personalizadas
+
+=== Passo 2.3: Criar DTOs
+
+==== 2.3.1: CreateProductDataDTO
+**Finalidade:** Transferir dados para criação de produto
+
+**Propriedades obrigatórias:**
+- `name` (string) - Nome do produto
+- `price` (decimal) - Preço do produto
+- `category` (string) - Categoria do produto
+
+**Métodos necessários:**
+- Construtor que recebe todos os campos obrigatórios
+- Método para criar DTO a partir de array de dados
+- Validação básica dos tipos de dados
+
+==== 2.3.2: UpdateProductDataDTO
+**Finalidade:** Transferir dados para atualização
+
+**Propriedades opcionais (podem ser nulas):**
+- `name` - Novo nome (opcional)
+- `price` - Novo preço (opcional)
+- `category` - Nova categoria (opcional)
+- `status` - Novo status (opcional)
+
+**Métodos necessários:**
+- Construtor que aceita todos os campos como opcionais
+- Método para criar DTO a partir de array de dados
+- Método para converter DTO de volta para array (apenas campos preenchidos)
+
+=== Passo 2.4: Criar Commands
+
+==== 2.4.1: CreateProductCommand
+**Padrão Command:** Encapsula a operação de criar produto
+
+**O que deve conter:**
+- Guardar os dados do produto a ser criado (via DTO)
+- Construtor que recebe os dados
+- Método para executar a criação usando o ProductService
+- Método para criar comando a partir de array de dados
+
+==== 2.4.2: UpdateProductCommand  
+**Similar ao comando de criação, mas para atualização:**
+- Guardar os dados de atualização (via DTO)
+- Método para executar a atualização usando ProductService e ID do produto
+
+=== Passo 2.5: Criar ProductService
+
+==== 2.5.1: Definir Interface
+**Casos de uso principais:**
+
+- `createProduct()` - Criar um novo produto
+- `updateProduct()` - Atualizar produto existente por ID
+- `deleteProduct()` - Deletar produto por ID
+- `getAllProducts()` - Buscar todos os produtos
+- `getProductById()` - Buscar produto específico por ID
+- `getProductsByCategory()` - Buscar produtos por categoria
+- `activateProduct()` - Ativar produto por ID
+- `deactivateProduct()` - Desativar produto por ID
+
+==== 2.5.2: Implementar Service
+**Herança:** O service vai estender o service base (se houver)
+
+**Dependências necessárias:**
+- ProductRepository (para acessar dados)
+- Validator (para validar dados de entrada)
+
+**Implementações principais:**
+
+[cols="3,7"]
+|===
+|Método |Responsabilidade
+
+|`createProduct()` 
+|Validar dados, criar entidade, persistir via repository
+
+|`updateProduct()` 
+|Buscar entidade, aplicar mudanças (Tell Don't Ask), persistir
+
+|`deleteProduct()` 
+|Buscar entidade, remover via repository
+
+|`getAllProducts()` 
+|Delegar para repository->findAll()
+
+|`getProductById()` 
+|Delegar para repository->find()
+
+|`activateProduct()` 
+|Buscar entidade, chamar activate(), persistir
+
+|Métodos privados
+|validatePrice(), validateCategory(), validateProductExists()
+|===
+
+=== Passo 2.6: Criar Validators (Opcional)
+
+==== ProductDataValidator
+**Responsabilidade:** Validar dados de entrada para produtos
+
+**Métodos:**
+- `validateCreateProductData(array $data): ValidationResult`
+- `validateUpdateProductData(array $data): ValidationResult`
+
+**Validações implementadas:**
+- Nome: obrigatório, mínimo 2 caracteres
+- Preço: obrigatório, maior que zero
+- Categoria: obrigatória, valores válidos
+- Status: valores válidos (draft, active, inactive)
+
+== FASE 3: Camada de Aplicação (Application)
+
+=== Passo 3.1: Criar ProductController
+
+==== 3.1.1: Definir Interface
+**Métodos obrigatórios (padrão REST):**
+
+- `create()` - Processar requisição POST para criar produto
+- `index()` - Processar requisição GET para listar produtos  
+- `show()` - Processar requisição GET para mostrar produto específico
+- `update()` - Processar requisição PUT para atualizar produto
+- `delete()` - Processar requisição DELETE para remover produto
+
+==== 3.1.2: Implementar Controller
+**Herança:** O controller vai estender o controller base existente
+
+**Dependências necessárias:**
+- ProductService (para executar operações de negócio)
+
+**Implementação de cada método:**
+
+[cols="2,8"]
+|===
+|Método |Fluxo de Implementação
+
+|`create()` 
+|1. Extrair dados JSON da requisição
+2. Criar DTO com os dados recebidos
+3. Chamar ProductService para criar produto
+4. Tratar erros (validação → 422, outros → 500)
+5. Retornar resposta padronizada (201 para sucesso)
+
+|`index()` 
+|1. Chamar ProductService para buscar todos os produtos
+2. Retornar lista em resposta padronizada (200)
+
+|`show()` 
+|1. Extrair ID dos `$args`
+2. Chamar ProductService para buscar produto por ID
+3. Verificar se encontrou (404 se não encontrou)
+4. Retornar produto em resposta padronizada (200)
+
+|`update()` 
+|1. Extrair ID dos `$args`
+2. Extrair dados JSON da requisição
+3. Criar UpdateDTO
+4. Chamar ProductService para atualizar produto
+5. Tratar erros (404, 422, 500)
+6. Retornar produto atualizado (200)
+
+|`delete()` 
+|1. Extrair ID dos `$args`
+2. Chamar ProductService para deletar produto
+3. Verificar se deletou (404 se não encontrou)
+4. Retornar resposta vazia de sucesso (200)
+|===
+
+**Padrão de tratamento de erros:**
+- Erros de validação → HTTP 422 + detalhes dos erros
+- Erros de regra de negócio → HTTP 404/409 + mensagem
+- Erros gerais → HTTP 500 + mensagem genérica
+
+=== Passo 3.2: Criar ProductsRouteProvider
+
+==== 3.2.1: Implementar Interface RouteProviderInterface
+
+**Configurações obrigatórias:**
+
+- Prefixo das rotas: "/api/products"
+- Nome do módulo: "Products"
+- Prioridade de carregamento: 40 (após System=30)
+- Verificação de pertencimento ao módulo
+- Definição de prioridade sobre outros providers
+
+==== 3.2.2: Registrar Rotas REST
+
+**Grupo de rotas:** `/api/products`
+
+[cols="2,3,3,4"]
+|===
+|Método HTTP |Rota |Controller |Descrição
+
+|GET 
+|`/api/products` 
+|`index()` 
+|Listar todos os produtos
+
+|GET 
+|`/api/products/{id:[0-9]+}` 
+|`show()` 
+|Buscar produto por ID
+
+|POST 
+|`/api/products` 
+|`create()` 
+|Criar novo produto
+
+|PUT 
+|`/api/products/{id:[0-9]+}` 
+|`update()` 
+|Atualizar produto existente
+
+|DELETE 
+|`/api/products/{id:[0-9]+}` 
+|`delete()` 
+|Deletar produto
+|===
+
+**Rotas adicionais (opcionais):**
+
+```
+GET /api/products/category/{category}    - Produtos por categoria
+POST /api/products/{id}/activate         - Ativar produto
+POST /api/products/{id}/deactivate       - Desativar produto
+```
+
+=== Passo 3.3: Criar Bootstrap e Service Definitions
+
+==== 3.3.1: ProductsBootstrap
+**Herança:** Estender `AbstractBootstrap`
+
+**Configurações:**
+- `getModuleName()`: "Products"
+- `getPriority()`: 40
+- `belongsToModule()`: true para "Products"
+- `hasRoutes()`: true
+- `getRouteProvider()`: instância de ProductsRouteProvider
+
+**Service Definitions carregadas:**
+- ProductServiceDefinition
+- ProductControllerDefinition
+
+==== 3.3.2: ProductServiceDefinition
+**Registros necessários no container DI:**
+
+```
+ProductRepositoryInterface::class => ProductRepository
+ProductServiceInterface::class => ProductService  
+ProductDataValidatorInterface::class => ProductDataValidator
+```
+
+**Configuração das dependências:**
+- ProductRepository precisa de EntityManager
+- ProductService precisa de Repository + Validator
+
+==== 3.3.3: ProductControllerDefinition  
+**Registros necessários:**
+
+```
+ProductControllerInterface::class => ProductController
+```
+
+**Dependências do Controller:**
+- ProductServiceInterface (injetado automaticamente)
+
+== FASE 4: Configuração e Integração
+
+=== Passo 4.1: Registrar Bootstrap
+
+==== 4.1.1: Localizar BootstrapOrchestrator
+Encontrar onde os bootstraps são inicializados:
+- Arquivo: `BootstrapOrchestrator->initializeDefaultBootstraps()`
+- Localização típica: `src/Application/Shared/Orchestrator/Impl/`
+
+==== 4.1.2: Adicionar ProductsBootstrap
+**No método de inicialização dos bootstraps:**
+
+Adicionar o ProductsBootstrap na lista, seguindo a ordem de prioridades:
+- CommonBootstrap (prioridade 10)
+- SecurityBootstrap (prioridade 20)  
+- SystemBootstrap (prioridade 30)
+- **ProductsBootstrap (prioridade 40)** ← NOVO
+- AuthBootstrap (prioridade 50)
+
+=== Passo 4.2: Configurar Roteamento
+
+==== 4.2.1: Verificar Carregamento Automático
+O sistema já carrega RouteProviders automaticamente através do:
+- BootstrapOrchestrator->loadAllRoutes()
+- Cada Bootstrap retorna seu RouteProvider
+
+==== 4.2.2: Confirmar Integração
+Verificar se ProductsBootstrap está retornando ProductsRouteProvider corretamente no método `getRouteProvider()`
+
+=== Passo 4.3: Atualizar Composer
+
+==== 4.3.1: Verificar Autoload
+Confirmar se o namespace está configurado corretamente no arquivo composer.json para que as novas classes sejam encontradas automaticamente.
+
+==== 4.3.2: Regenerar Autoload
+Executar comando do composer para regenerar o autoload se necessário:
+`composer dump-autoload`
+
+== FASE 5: Banco de Dados
+
+=== Passo 5.1: Criar Migration
+
+==== 5.1.1: Estrutura da Tabela Products
+
+[cols="3,2,2,3"]
+|===
+|Campo |Tipo |Restrições |Descrição
+
+|`id` 
+|INT 
+|PRIMARY KEY, AUTO_INCREMENT 
+|Identificador único
+
+|`name` 
+|VARCHAR(255) 
+|NOT NULL 
+|Nome do produto
+
+|`price` 
+|DECIMAL(10,2) 
+|NOT NULL 
+|Preço do produto
+
+|`category` 
+|VARCHAR(100) 
+|NOT NULL 
+|Categoria do produto
+
+|`status` 
+|VARCHAR(20) 
+|DEFAULT 'draft' 
+|Status do produto
+
+|`created_at` 
+|DATETIME 
+|NOT NULL 
+|Data de criação
+
+|`updated_at` 
+|DATETIME 
+|NOT NULL 
+|Data de atualização
+|===
+
+==== 5.1.2: Criar Arquivo de Migration
+**Localização:** `src/Infrastructure/Common/Database/Migrations/2025/`
+
+**Nome sugerido:** `Version20251024120000_CreateProductsTable.php`
+
+**Conteúdo da migration:**
+- `up()`: CREATE TABLE com estrutura definida
+- `down()`: DROP TABLE products
+
+==== 5.1.3: Executar Migration
+**Executar via linha de comando:**
+Usar o comando de migration do Docker para aplicar as mudanças no banco de dados
+
+=== Passo 5.2: Configurar Doctrine
+
+==== 5.2.1: Anotações ORM na ProductEntity
+**Configurações necessárias:**
+
+```
+@Entity(repositoryClass="ProductRepository")
+@Table(name="products")
+```
+
+**Anotações por propriedade:**
+- `@Id @GeneratedValue @Column(type="integer")` para id
+- `@Column(type="string", length=255)` para name
+- `@Column(type="decimal", precision=10, scale=2)` para price
+- `@Column(type="string", length=100)` para category
+- `@Column(type="string", length=20)` para status
+- `@Column(type="datetime")` para created_at/updated_at
+
+==== 5.2.2: Verificar Mapeamento
+**Validar configuração:**
+Usar comando do Doctrine para verificar se o mapeamento está correto
+
+== FASE 6: Testes e Validação
+
+=== Passo 6.1: Testes Manuais
+
+==== 6.1.1: Testar Criação (POST)
+**Endpoint:** `POST /api/products`
+
+**Request de teste:**
+```
+Content-Type: application/json
+
+{
+  "name": "Smartphone XYZ",
+  "price": 899.99,
+  "category": "electronics"
+}
+```
+
+**Response esperado:**
+- Status: 201 Created
+- Body: JSON com produto criado + message + timestamp
+
+==== 6.1.2: Testar Listagem (GET)
+**Endpoint:** `GET /api/products`
+
+**Response esperado:**
+- Status: 200 OK
+- Body: Array de produtos com paginação (se implementada)
+
+==== 6.1.3: Testar Busca por ID (GET)
+**Endpoint:** `GET /api/products/1`
+
+**Cenários de teste:**
+- ID existente: retorna produto (200)
+- ID inexistente: retorna erro (404)
+
+==== 6.1.4: Testar Atualização (PUT)
+**Endpoint:** `PUT /api/products/1`
+
+**Request de teste:**
+```json
+{
+  "name": "Smartphone XYZ Pro",
+  "price": 1099.99,
+  "status": "active"
+}
+```
+
+==== 6.1.5: Testar Exclusão (DELETE)
+**Endpoint:** `DELETE /api/products/1`
+
+**Response esperado:**
+- Status: 200 OK (se deletou)
+- Status: 404 Not Found (se não encontrou)
+
+=== Passo 6.2: Testes de Validação
+
+==== 6.2.1: Cenários de Erro - Criação
+**Testes obrigatórios:**
+
+[cols="4,3,3"]
+|===
+|Cenário |Request |Response Esperado
+
+|Nome vazio 
+|`{"name": "", "price": 100, "category": "test"}` 
+|422 + erro de validação
+
+|Preço zero 
+|`{"name": "Test", "price": 0, "category": "test"}` 
+|422 + erro de validação
+
+|Categoria vazia 
+|`{"name": "Test", "price": 100, "category": ""}` 
+|422 + erro de validação
+
+|JSON malformado 
+|`{"name": "Test"` 
+|400 + erro de parsing
+
+|Content-Type incorreto 
+|text/plain 
+|415 + erro de content-type
+|===
+
+==== 6.2.2: Cenários de Erro - Busca/Atualização
+- ID não numérico: deve retornar 404 (rota não encontrada)
+- ID inexistente: deve retornar 404 com mensagem adequada
+- Dados inválidos na atualização: deve retornar 422
+
+==== 6.2.3: Verificar Formato das Respostas
+**Padrão esperado para sucesso:**
+```json
+{
+  "success": true,
+  "data": { /* dados do produto */ },
+  "message": "Operação realizada com sucesso",
+  "code": 200,
+  "timestamp": "2025-09-24 15:30:45"
+}
+```
+
+**Padrão esperado para erro:**
+```json
+{
+  "success": false,
+  "data": null,
+  "message": "Erro na operação",
+  "code": 422,
+  "timestamp": "2025-09-24 15:30:45"
+}
+```
+
+=== Passo 6.3: Testes de Integração
+
+==== 6.3.1: Verificar Persistência
+1. Criar produto via API
+2. Verificar se foi salvo no banco de dados
+3. Buscar produto via API
+4. Confirmar dados consistentes
+
+==== 6.3.2: Testar Comportamentos da Entidade
+**Testes diretos nos métodos:**
+- `activate()`: muda status para 'active'
+- `deactivate()`: muda status para 'inactive'
+- `updatePrice()`: atualiza preço e updated_at
+- `isActive()`: retorna boolean correto
+- `canBeSold()`: valida regras de negócio
+
+==== 6.3.3: Validar Regras de Negócio
+- Produto só pode ser vendido se ativo
+- Preço deve ser sempre positivo
+- Nome não pode ser vazio
+- Status deve ter valores válidos
+
+== FASE 7: Documentação
+
+=== Passo 7.1: Documentar Endpoints
+
+==== 7.1.1: Documentação da API
+**Criar seção no README ou documento específico:**
+
+**Endpoints Disponíveis:**
+
+[cols="2,3,5"]
+|===
+|Método |Endpoint |Descrição
+
+|GET 
+|`/api/products` 
+|Lista todos os produtos
+
+|GET 
+|`/api/products/{id}` 
+|Busca produto por ID
+
+|POST 
+|`/api/products` 
+|Cria novo produto
+
+|PUT 
+|`/api/products/{id}` 
+|Atualiza produto existente
+
+|DELETE 
+|`/api/products/{id}` 
+|Remove produto
+|===
+
+==== 7.1.2: Exemplos de Request/Response
+**Para cada endpoint, documentar:**
+- Parâmetros necessários
+- Exemplo de request (JSON)
+- Exemplo de response de sucesso
+- Exemplos de responses de erro
+
+==== 7.1.3: Códigos de Status
+**Documentar todos os códigos retornados:**
+
+[cols="2,8"]
+|===
+|Status |Significado
+
+|200 
+|Operação realizada com sucesso
+
+|201 
+|Recurso criado com sucesso
+
+|400 
+|Erro na requisição (JSON malformado)
+
+|404 
+|Recurso não encontrado
+
+|422 
+|Dados inválidos (erro de validação)
+
+|500 
+|Erro interno do servidor
+|===
+
+=== Passo 7.2: Atualizar README
+
+==== 7.2.1: Adicionar Seção Products
+**Incluir no README principal:**
+- Descrição do módulo Products
+- Lista de funcionalidades implementadas
+- Links para documentação detalhada da API
+
+==== 7.2.2: Exemplos de Uso
+**Incluir exemplos práticos:**
+- Como criar um produto via curl
+- Como buscar produtos via Postman
+- Como integrar com outros módulos
+
+== CHECKLIST FINAL
+
+=== Domain Layer
+- [ ] ProductEntityInterface definida
+- [ ] ProductEntity implementada com comportamentos
+- [ ] ProductServiceInterface definida
+- [ ] ProductService implementado com casos de uso
+- [ ] ProductRepositoryInterface definida
+- [ ] ProductRepository implementado
+- [ ] CreateProductDataDTO criado
+- [ ] UpdateProductDataDTO criado
+- [ ] CreateProductCommand implementado
+- [ ] UpdateProductCommand implementado
+- [ ] ProductDataValidator implementado
+
+=== Application Layer
+- [ ] ProductControllerInterface definida
+- [ ] ProductController implementado com CRUD
+- [ ] ProductsRouteProvider implementado
+- [ ] ProductsBootstrap criado
+- [ ] ProductServiceDefinition configurada
+- [ ] ProductControllerDefinition configurada
+
+=== Infrastructure
+- [ ] Migration criada e executada
+- [ ] Doctrine configurado na entidade
+- [ ] Mapeamento ORM validado
+
+=== Integration
+- [ ] Bootstrap registrado no Orchestrator
+- [ ] Rotas carregadas automaticamente
+- [ ] Container DI configurado
+
+=== Testing
+- [ ] Teste POST /api/products (criar)
+- [ ] Teste GET /api/products (listar)
+- [ ] Teste GET /api/products/{id} (buscar)
+- [ ] Teste PUT /api/products/{id} (atualizar)
+- [ ] Teste DELETE /api/products/{id} (deletar)
+- [ ] Testes de validação (422)
+- [ ] Testes de erro (404, 500)
+- [ ] Verificação de persistência no banco
+
+=== Documentation
+- [ ] Endpoints documentados
+- [ ] Exemplos de request/response
+- [ ] README atualizado
+- [ ] Códigos de status documentados
+
+== Resultado Final
+
+Após seguir todos os passos deste guia, você terá:
+
+✅ **CRUD completo** de produtos funcionando  
+✅ **API REST** com 5 endpoints padronizados  
+✅ **Domain-Driven Design** implementado  
+✅ **Clean Architecture** seguida  
+✅ **SOLID e Object Calisthenics** aplicados  
+✅ **Tratamento de erros** padronizado  
+✅ **Documentação** completa da API  
+
+O módulo de produtos será uma **réplica fiel** do módulo de usuários, consolidando o aprendizado dos padrões arquiteturais através da prática! 🚀
+
+---
+
+*Documento criado em 24/09/2025 - Versão 1.0*

@@ -170,13 +170,8 @@ final class SystemService implements SystemServiceInterface
                 'doctrine_version' => Version::VERSION,
             ];
         } catch (Exception $e) {
-            return [
-                'status' => 'error',
-                'message' => 'Erro ao conectar com banco de dados: ' . $e->getMessage(),
-                'error_code' => $e->getCode(),
-                'error_file' => $e->getFile(),
-                'error_line' => $e->getLine(),
-            ];
+            // Re-throw the exception so the controller can handle it properly
+            throw new Exception('Erro ao conectar com banco de dados: ' . $e->getMessage(), $e->getCode(), $e);
         }
     }
 }

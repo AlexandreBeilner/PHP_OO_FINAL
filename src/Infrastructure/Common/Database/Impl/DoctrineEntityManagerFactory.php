@@ -6,6 +6,7 @@ namespace App\Infrastructure\Common\Database\Impl;
 
 use App\Infrastructure\Common\Database\DoctrineEntityManagerFactoryInterface;
 use App\Infrastructure\Common\Database\DoctrineEntityManagerInterface;
+use App\Application\Shared\Utils\Impl\ProjectRootDiscovery;
 use PDO;
 
 final class DoctrineEntityManagerFactory implements DoctrineEntityManagerFactoryInterface
@@ -48,8 +49,9 @@ final class DoctrineEntityManagerFactory implements DoctrineEntityManagerFactory
                     'proxy_dir' => __DIR__ . '/../../cache/proxies',
                     'proxy_namespace' => 'App\\Proxies',
                     'entity_paths' => [
-                        __DIR__ . '/../../../Domain/*/Entities/Impl',
-                        __DIR__ . '/../../../Common/Entities',
+                        ProjectRootDiscovery::getProjectRoot() . '/src/Domain/Security/Entities/Impl',
+                        ProjectRootDiscovery::getProjectRoot() . '/src/Domain/Auth/Entities/Impl',
+                        ProjectRootDiscovery::getProjectRoot() . '/src/Domain/System/Entities/Impl',
                     ],
                     'mapping_types' => [
                         'enum' => 'string',

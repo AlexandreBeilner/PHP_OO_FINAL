@@ -32,7 +32,7 @@ final class UserController extends AbstractBaseController implements UserControl
         try {
             $createUserCommand = $this->userValidationService->validateCreateUserCommand($request);
             $user = $createUserCommand->executeWith($this->userService);
-
+            
             $apiResponse = $this->success($user, 'Usuário criado com sucesso', 201);
             $response->getBody()->write($apiResponse->toJson());
             return $response->withHeader('Content-Type', 'application/json')->withStatus($apiResponse->getCode());

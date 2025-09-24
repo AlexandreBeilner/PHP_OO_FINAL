@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Application\Shared\DTOs\Impl;
 
 use App\Application\Shared\DTOs\ApiResponseInterface;
+use JsonException;
 
 final class ApiResponse implements ApiResponseInterface
 {
@@ -65,6 +66,9 @@ final class ApiResponse implements ApiResponseInterface
         ];
     }
 
+    /**
+     * @throws JsonException
+     */
     public function toJson(): string
     {
         return json_encode($this->toArray(), JSON_THROW_ON_ERROR);

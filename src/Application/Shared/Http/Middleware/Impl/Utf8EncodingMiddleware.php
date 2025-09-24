@@ -39,9 +39,12 @@ final class Utf8EncodingMiddleware implements Utf8EncodingMiddlewareInterface
             }
         }
 
-        // Reescrever o body com conteúdo UTF-8
-        $body->rewind();
-        $body->write($content);
+        // Criar um novo stream com o conteúdo UTF-8 para evitar duplicação
+        $stream = fopen('php://memory', 'r+');
+        fwrite($stream, $content);
+        rewind($stream);
+        $newStream = new \Nyholm\Psr7\Stream($stream);
+        $response = $response->withBody($newStream);
 
         return $response;
     }

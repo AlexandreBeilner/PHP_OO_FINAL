@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Application\Modules\System\Bootstrap\Impl;
 
-use App\Application\Modules\Common\Bootstrap\ServiceDefinitionInterface;
-use App\Common\Database\DoctrineEntityManagerInterface;
+use App\Application\Shared\ServiceDefinitionInterface;
+use App\Infrastructure\Common\Database\DoctrineEntityManagerInterface;
 use App\Domain\System\Services\Impl\SystemService;
 use App\Domain\System\Services\SystemServiceInterface;
 use DI\ContainerBuilder;

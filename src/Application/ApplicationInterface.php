@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Application;
 
-use App\Application\Common\Http\SlimAppFactoryInterface;
+use App\Application\Shared\Http\SlimAppFactoryInterface;
 use DI\Container;
 use Slim\App;
 

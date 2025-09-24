@@ -3,7 +3,7 @@
 FROM nginx
 
 # Argumento para definir a versão do PHP que será usada na configuração
-ARG PHP_VERSION=74
+ARG PHP_VERSION=7.4
 ENV PHP_VERSION=${PHP_VERSION}
 
 COPY default.conf /etc/nginx/conf.d/default.conf

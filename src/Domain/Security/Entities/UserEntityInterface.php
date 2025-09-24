@@ -9,33 +9,37 @@ use App\Domain\Common\Entities\Behaviors\UuidableBehaviorInterface;
 
 interface UserEntityInterface extends TimestampableBehaviorInterface, UuidableBehaviorInterface
 {
-    public function getEmail(): string;
 
     public function getId(): int;
-
-    public function getName(): string;
-
-    public function getPassword(): string;
-
-    public function getRole(): string;
-
-    public function getStatus(): string;
 
     public function hasRole(string $role): bool;
 
     public function isActive(): bool;
 
-    public function setEmail(string $email): self;
-
-    public function setId(int $id): self;
-
-    public function setName(string $name): self;
-
-    public function setPassword(string $password): self;
-
-    public function setRole(string $role): self;
-
-    public function setStatus(string $status): self;
 
     public function verifyPassword(string $password): bool;
+
+    public function activate(): self;
+    
+    public function deactivate(): self;
+    
+    public function updatePassword(string $newPassword): self;
+    
+    public function updateProfile(array $profileData): self;
+    
+    public function authenticate(string $password): bool;
+    
+    public function canPerform(string $action): bool;
+    
+    public function isAdmin(): bool;
+    
+    public function needsPasswordChange(): bool;
+    
+    public function canBePromotedToAdmin(): bool;
+    
+    public function hasCompleteProfile(): bool;
+    
+    public function isSameUser(UserEntityInterface $other): bool;
+    
+    public function canChangeEmailTo(string $newEmail): bool;
 }

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Application\Modules\Security\Bootstrap\Impl;
 
-use App\Application\Modules\Common\Bootstrap\ServiceDefinitionInterface;
+use App\Application\Shared\ServiceDefinitionInterface;
 use App\Domain\Security\Services\UserValidationServiceInterface;
 use App\Domain\Security\Services\Impl\UserValidationService;
 use App\Domain\Security\Validators\UserDataValidatorInterface;

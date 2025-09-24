@@ -14,6 +14,8 @@ use App\Domain\Security\Entities\Impl\UserEntity;
 use App\Domain\Security\Entities\UserEntityInterface;
 use App\Domain\Security\Repositories\UserRepositoryInterface;
 use App\Domain\Security\Services\UserServiceInterface;
+use App\Domain\Security\DTOs\Impl\CreateUserDataDTO;
+use App\Domain\Security\DTOs\Impl\UpdateUserDataDTO;
 use InvalidArgumentException;
 
 final class UserService extends AbstractService implements UserServiceInterface
@@ -30,168 +32,243 @@ final class UserService extends AbstractService implements UserServiceInterface
 
     public function activateUser(int $id): UserEntityInterface
     {
-        return $this->updateUser($id, ['status' => 'active']);
+        return $this->processUserById($id, function($user) {
+            $user->activate();
+            return $this->repository->save($user);
+        });
     }
 
     public function authenticateUser(string $email, string $password): ?UserEntityInterface
     {
-        $user = $this->getUserByEmail($email);
-        if (! $user) {
-            return null;
-        }
-
-        if ($this->verifyPassword($password, $user->getPassword())) {
-            return $user;
-        }
-
-        return null;
+        return $this->authenticateUserByEmail($email, $password);
     }
 
     public function changePassword(int $id, string $newPassword): UserEntityInterface
     {
         $this->validatePassword($newPassword);
-        return $this->updateUser($id, ['password' => $newPassword]);
+        
+        return $this->processUserById($id, function($user) use ($newPassword) {
+            $user->updatePassword($newPassword);
+            return $this->repository->save($user);
+        });
     }
 
-    public function createUser(string $name, string $email, string $password, string $role = 'user'): UserEntityInterface
+    /**
+     * Cria usuário usando DTO puro (SRP + Tell Don't Ask)
+     */
+    public function createUser(CreateUserDataDTO $data): UserEntityInterface
     {
-        $this->validateEmail($email);
-        $this->validateEmailAvailability($email);
-        $this->validateUserData($name, $email, $password, $role);
+        // Validações de domínio usando dados do DTO
+        $this->validateEmail($data->email);
+        $this->validateEmailAvailabilityOrThrow($data->email);
+        $this->validatePassword($data->password);
+        $this->validateRole($data->role);
 
-        $timestampableBehavior = new TimestampableBehavior();
-        $uuidableBehavior = new UuidableBehavior();
-
+        // Criação da entidade usando propriedades readonly do DTO
         $user = new UserEntity(
-            $name,
-            $email,
-            $password,
-            $role,
+            $data->name,
+            $data->email,
+            $data->password,
+            $data->role,
             'active'
         );
 
         return $this->repository->save($user);
     }
 
+
+
+    // Salva entidade após alterações comportamentais
+    public function saveUser(UserEntityInterface $user): UserEntityInterface
+    {
+        return $this->repository->save($user);
+    }
+
     public function deactivateUser(int $id): UserEntityInterface
     {
-        return $this->updateUser($id, ['status' => 'inactive']);
+        return $this->processUserById($id, function($user) {
+            $user->deactivate();
+            return $this->repository->save($user);
+        });
     }
 
     public function deleteUser(int $id): bool
     {
-        $user = $this->getUserById($id);
-        if (! $user) {
+        try {
+            return $this->processUserById($id, function($user) {
+                return $this->repository->delete($user);
+            });
+        } catch (BusinessLogicExceptionAbstract $e) {
             return false;
         }
-
-        return $this->repository->delete($user);
     }
 
-    public function getActiveUsers(): array
+    /**
+     * Processa todos os usuários com uma ação específica
+     */
+    public function processAllUsers(callable $action): array
     {
-        return $this->repository->findActiveUsers();
-    }
-
-    public function getAllUsers(): array
-    {
-        return $this->repository->findAll();
-    }
-
-    public function getInactiveUsers(): array
-    {
-        return $this->repository->findInactiveUsers();
-    }
-
-    public function getUserByEmail(string $email): ?UserEntityInterface
-    {
-        return $this->repository->findByEmail($email);
-    }
-
-    public function getUserById(int $id): ?UserEntityInterface
-    {
-        // Usar o método find do EntityRepository diretamente através do parent
-        $user = $this->repository->find($id);
-        return $user instanceof UserEntityInterface ? $user : null;
-    }
-
-    public function getUserCount(): int
-    {
-        return $this->repository->count();
-    }
-
-    public function getUserCountByRole(string $role): int
-    {
-        return $this->repository->count(['role' => $role]);
-    }
-
-    public function getUsersByRole(string $role): array
-    {
-        return $this->repository->findByRole($role);
-    }
-
-    public function isEmailAvailable(string $email, ?int $excludeId = null): bool
-    {
-        $existingUser = $this->getUserByEmail($email);
-        if (! $existingUser) {
-            return true;
+        $users = $this->repository->findAll();
+        $results = [];
+        
+        foreach ($users as $user) {
+            $results[] = $action($user);
         }
-
-        return $excludeId !== null && $existingUser->getId() === $excludeId;
+        
+        return $results;
     }
 
-    public function searchUsersByName(string $name): array
+    /**
+     * Autentica usuário por email e senha
+     */
+    public function authenticateUserByEmail(string $email, string $password): ?UserEntityInterface
     {
-        return $this->repository->searchByName($name);
+        $user = $this->repository->findByEmail($email);
+        if (!$user || !$user->authenticate($password)) {
+            return null;
+        }
+        
+        return $user;
     }
 
-    public function updateUser(int $id, array $data): UserEntityInterface
+    /**
+     * Processa usuário por ID com ação específica
+     */
+    public function processUserById(int $id, callable $action)
     {
-        $user = $this->getUserById($id);
-        if (! $user) {
+        $user = $this->repository->find($id);
+        if (!$user instanceof UserEntityInterface) {
             throw new BusinessLogicExceptionAbstract("Usuário com ID {$id} não encontrado");
         }
+        
+        return $action($user);
+    }
 
-        if (isset($data['email'])) {
-            $this->validateEmail($data['email']);
-            if ($data['email'] !== $user->getEmail()) {
-                $this->validateEmailAvailability($data['email'], $id);
+    /**
+     * Atualiza usuário usando DTO puro (SRP + Tell Don't Ask)
+     */
+    public function updateUser(int $id, UpdateUserDataDTO $data): UserEntityInterface
+    {
+        return $this->processUserById($id, function($user) use ($data, $id) {
+            // Validações usando propriedades readonly do DTO
+            if ($data->email !== null) {
+                $this->validateEmail($data->email);
+                if ($data->email !== $user->email) {
+                    $this->validateEmailAvailabilityOrThrow($data->email, $id);
+                }
+            }
+    
+            if ($data->password !== null) {
+                $this->validatePassword($data->password);
+            }
+    
+            if ($data->role !== null) {
+                $this->validateRole($data->role);
+            }
+    
+            $dataArray = $data->toArray();
+            
+            // Profile updates
+            $profileFields = ['name', 'email', 'role'];
+            $profileData = array_intersect_key($dataArray, array_flip($profileFields));
+            if (!empty($profileData)) {
+                $user->updateProfile($profileData);
+            }
+            
+            // Password update
+            if ($data->password !== null) {
+                $user->updatePassword($data->password);
+            }
+            
+            // Status changes
+            if ($data->status !== null) {
+                if ($data->status === 'active') {
+                    $user->activate();
+                } elseif ($data->status === 'inactive') {
+                    $user->deactivate();
+                }
+            }
+    
+            return $this->repository->save($user);
+        });
+    }
+
+    // ✅ TELL, DON'T ASK: High-level behavioral methods
+    
+    /**
+     * Promove usuário para admin - Tell, Don't Ask
+     */
+    public function promoteToAdmin(int $userId): ?UserEntityInterface
+    {
+        try {
+            return $this->processUserById($userId, function($user) {
+                if ($user->isAdmin()) {
+                    return $user;
+                }
+                
+                $user->updateProfile(['role' => 'admin']);
+                return $this->saveUser($user);
+            });
+        } catch (\InvalidArgumentException $e) {
+            return null;
+        }
+    }
+
+    /**
+     * Desabilita usuário se inativo há muito tempo - Tell, Don't Ask
+     */
+    public function deactivateInactiveUsers(int $daysInactive = 90): array
+    {
+        return $this->processAllUsers(function($user) {
+            if ($user->isActive() && $user->needsPasswordChange()) {
+                $user->deactivate();
+                $this->saveUser($user);
+                return $user;
+            }
+            return null;
+        });
+    }
+
+    /**
+     * Força mudança de senha para usuários que precisam - Tell, Don't Ask
+     */
+    public function enforcePasswordChange(array $userIds): array
+    {
+        $updatedUsers = [];
+        
+        foreach ($userIds as $userId) {
+            try {
+                $user = $this->processUserById($userId, function($user) {
+                    if ($user->needsPasswordChange()) {
+                        $user->deactivate();
+                        return $this->saveUser($user);
+                    }
+                    return null;
+                });
+                
+                if ($user !== null) {
+                    $updatedUsers[] = $user;
+                }
+            } catch (\InvalidArgumentException $e) {
+                // Usuário não encontrado, continua para o próximo
+                continue;
             }
         }
-
-        if (isset($data['name'])) {
-            $user->setName($data['name']);
-        }
-        if (isset($data['email'])) {
-            $user->setEmail($data['email']);
-        }
-        if (isset($data['role'])) {
-            $user->setRole($data['role']);
-        }
-        if (isset($data['status'])) {
-            $user->setStatus($data['status']);
-        }
-        if (isset($data['password'])) {
-            $user->setPassword($data['password']);
-        }
-
-        $user->touch(); // Atualizar timestamp
-
-        return $this->repository->save($user);
+        
+        return $updatedUsers;
     }
 
     protected function extractEntityData(object $entity): array
     {
         if (! $entity instanceof UserEntityInterface) {
-            throw new \InvalidArgumentException('Entidade deve implementar UserEntityInterface');
+            throw new BusinessLogicExceptionAbstract('Entidade deve implementar UserEntityInterface');
         }
 
         return [
-            'name' => $entity->getName(),
-            'email' => $entity->getEmail(),
-            'password' => $entity->getPassword(),
-            'role' => $entity->getRole(),
-            'status' => $entity->getStatus(),
+            'name' => $entity->name,
+            'email' => $entity->email,
+            'role' => $entity->role,
+            'status' => $entity->status,
         ];
     }
 
@@ -200,17 +277,77 @@ final class UserService extends AbstractService implements UserServiceInterface
         return password_hash($password, PASSWORD_DEFAULT);
     }
 
-    private function validateEmail(string $email): void
+    private function validateEmailAvailabilityOrThrow(string $email, ?int $excludeId = null): void
     {
-        if (! $this->emailValidator->validate($email)) {
-            throw new ValidationException('Formato de email inválido: ' . $this->emailValidator->getErrorMessage());
+        if (!$this->validateEmailAvailability($email, $excludeId)) {
+            throw new ValidationException("Email '{$email}' já está em uso");
         }
     }
 
-    private function validateEmailAvailability(string $email, ?int $excludeId = null): void
+    /**
+     * Valida se email está disponível para uso
+     */
+    public function validateEmailAvailability(string $email, ?int $excludeId = null): bool
     {
-        if (! $this->isEmailAvailable($email, $excludeId)) {
-            throw new ValidationException("Email '{$email}' já está em uso");
+        $existingUser = $this->repository->findByEmail($email);
+        if (!$existingUser) {
+            return true;
+        }
+        return $excludeId !== null && $existingUser->getId() === $excludeId;
+    }
+
+    /**
+     * Gera relatório de estatísticas dos usuários
+     */
+    public function generateUserStatistics(): array
+    {
+        $totalUsers = $this->repository->count();
+        $activeUsers = $this->repository->count(['status' => 'active']);
+        $adminUsers = $this->repository->count(['role' => 'admin']);
+        
+        return [
+            'total' => $totalUsers,
+            'active' => $activeUsers,
+            'inactive' => $totalUsers - $activeUsers,
+            'admins' => $adminUsers,
+            'regular_users' => $totalUsers - $adminUsers,
+            'activation_rate' => $totalUsers > 0 ? round(($activeUsers / $totalUsers) * 100, 2) : 0
+        ];
+    }
+
+    /**
+     * Processa todos os usuários de uma função específica
+     */
+    public function processUsersByRole(string $role, callable $action): array
+    {
+        $users = $this->repository->findByRole($role);
+        $results = [];
+        
+        foreach ($users as $user) {
+            $results[] = $action($user);
+        }
+        
+        return $results;
+    }
+
+    /**
+     * Valida capacidade do sistema (verifica se pode criar novos usuários)
+     */
+    public function validateSystemCapacity(int $maxUsers = 1000): bool
+    {
+        return $this->repository->count() < $maxUsers;
+    }
+
+    public function searchUsersByName(string $name): array
+    {
+        return $this->repository->searchByName($name);
+    }
+
+
+    private function validateEmail(string $email): void
+    {
+        if (!$this->emailValidator->validate($email)) {
+            throw new ValidationException('Formato de email inválido: ' . $this->emailValidator->getErrorMessage());
         }
     }
 
@@ -224,23 +361,9 @@ final class UserService extends AbstractService implements UserServiceInterface
     private function validateRole(string $role): void
     {
         $validRoles = ['admin', 'user', 'moderator'];
-        if (! in_array($role, $validRoles, true)) {
+        if (!in_array($role, $validRoles, true)) {
             throw new ValidationException('Função inválida. Deve ser uma das: ' . implode(', ', $validRoles));
         }
-    }
-
-    private function validateUserData(string $name, string $email, string $password, string $role): void
-    {
-        if (empty(trim($name))) {
-            throw new ValidationException('Nome não pode estar vazio');
-        }
-
-        if (strlen($name) < 2) {
-            throw new ValidationException('Nome deve ter pelo menos 2 caracteres');
-        }
-
-        $this->validatePassword($password);
-        $this->validateRole($role);
     }
 
     private function verifyPassword(string $password, string $hash): bool

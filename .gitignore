@@ -1,3 +1,7 @@
-cache
-vendor
-.idea
+/.idea/
+/.cursor/
+/.phpunit.result.cache
+/var/
+/vendor/
+composer.lock
+/cache

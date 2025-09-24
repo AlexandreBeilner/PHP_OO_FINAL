@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Application\Modules\Security\Controllers\Impl;
 
-use App\Application\Common\Controllers\Impl\AbstractBaseController;
+use App\Application\Shared\Controllers\Impl\AbstractBaseController;
 use App\Application\Modules\Security\Controllers\UserControllerInterface;
 use App\Domain\Common\Exceptions\Impl\BusinessLogicExceptionAbstract;
 use App\Domain\Common\Exceptions\Impl\ValidationException;
@@ -30,14 +30,9 @@ final class UserController extends AbstractBaseController implements UserControl
     public function create(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
         try {
-            $createUserRequest = $this->userValidationService->validateCreateUserRequest($request);
-            $user = $this->userService->createUser(
-                $createUserRequest->getName(),
-                $createUserRequest->getEmail(),
-                $createUserRequest->getPassword(),
-                $createUserRequest->getRole()
-            );
-            
+            $createUserCommand = $this->userValidationService->validateCreateUserCommand($request);
+            $user = $createUserCommand->executeWith($this->userService);
+
             $apiResponse = $this->success($user, 'Usuário criado com sucesso', 201);
             $response->getBody()->write($apiResponse->toJson());
             return $response->withHeader('Content-Type', 'application/json')->withStatus($apiResponse->getCode());
@@ -81,7 +76,7 @@ final class UserController extends AbstractBaseController implements UserControl
     public function index(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
         try {
-            $users = $this->userService->getAllUsers();
+            $users = $this->userService->processAllUsers(fn($user) => $user);
             $apiResponse = $this->success($users, 'Usuários listados com sucesso');
             $response->getBody()->write($apiResponse->toJson());
             return $response->withHeader('Content-Type', 'application/json')->withStatus($apiResponse->getCode());
@@ -96,15 +91,13 @@ final class UserController extends AbstractBaseController implements UserControl
     {
         try {
             $id = (int) ($args['id'] ?? $request->getAttribute('id'));
-            $user = $this->userService->getUserById($id);
-
-            if (! $user) {
-                $apiResponse = $this->notFound('Usuário não encontrado');
-                $response->getBody()->write($apiResponse->toJson());
-                return $response->withHeader('Content-Type', 'application/json')->withStatus($apiResponse->getCode());
-            }
+            $user = $this->userService->processUserById($id, fn($user) => $user);
 
             $apiResponse = $this->success($user, 'Usuário encontrado com sucesso');
+            $response->getBody()->write($apiResponse->toJson());
+            return $response->withHeader('Content-Type', 'application/json')->withStatus($apiResponse->getCode());
+        } catch (BusinessLogicExceptionAbstract $e) {
+            $apiResponse = $this->notFound('Usuário não encontrado');
             $response->getBody()->write($apiResponse->toJson());
             return $response->withHeader('Content-Type', 'application/json')->withStatus($apiResponse->getCode());
         } catch (Exception $e) {
@@ -118,8 +111,8 @@ final class UserController extends AbstractBaseController implements UserControl
     {
         try {
             $id = (int) ($args['id'] ?? $request->getAttribute('id'));
-            $updateUserRequest = $this->userValidationService->validateUpdateUserRequest($request);
-            $user = $this->userService->updateUser($id, $updateUserRequest->toArray());
+            $updateUserCommand = $this->userValidationService->validateUpdateUserCommand($request);
+            $user = $updateUserCommand->executeWithUserId($this->userService, $id);
 
             if (! $user) {
                 $apiResponse = $this->notFound('Usuário não encontrado');

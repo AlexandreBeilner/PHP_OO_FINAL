@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Application\Modules\Security\Bootstrap\Impl;
 
-use App\Application\Modules\Common\Bootstrap\ServiceDefinitionInterface;
-use App\Common\Database\DoctrineEntityManagerInterface;
+use App\Application\Shared\ServiceDefinitionInterface;
+use App\Infrastructure\Common\Database\DoctrineEntityManagerInterface;
 use App\Domain\Common\Validators\Impl\EmailValidator;
 use App\Domain\Security\Repositories\Impl\UserRepository;
 use App\Domain\Security\Repositories\UserRepositoryInterface;

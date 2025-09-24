@@ -10,8 +10,8 @@ EOSQL
 # Configure postgresql.conf for replication
 echo "# Replication settings" >> /var/lib/postgresql/data/postgresql.conf
 echo "wal_level = replica" >> /var/lib/postgresql/data/postgresql.conf
-echo "max_wal_senders = 10" >> /var/lib/postgresql/data/postgresql.conf
-echo "max_replication_slots = 5" >> /var/lib/postgresql/data/postgresql.conf
+echo "max_wal_senders = 5" >> /var/lib/postgresql/data/postgresql.conf
+echo "max_replication_slots = 3" >> /var/lib/postgresql/data/postgresql.conf
 echo "synchronous_commit = off" >> /var/lib/postgresql/data/postgresql.conf
 echo "archive_mode = on" >> /var/lib/postgresql/data/postgresql.conf
 echo "archive_command = '/bin/true'" >> /var/lib/postgresql/data/postgresql.conf

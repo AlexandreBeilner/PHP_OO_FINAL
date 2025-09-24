@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Domain\Security\Services;
 
 use App\Domain\Security\Entities\UserEntityInterface;
+use App\Domain\Security\DTOs\Impl\CreateUserDataDTO;
+use App\Domain\Security\DTOs\Impl\UpdateUserDataDTO;
 
 interface UserServiceInterface
 {
@@ -14,31 +16,35 @@ interface UserServiceInterface
 
     public function changePassword(int $id, string $newPassword): UserEntityInterface;
 
-    public function createUser(string $name, string $email, string $password, string $role = 'user'): UserEntityInterface;
+    /**
+     * Cria usuário usando DTO puro (SRP + Tell Don't Ask)
+     */
+    public function createUser(CreateUserDataDTO $data): UserEntityInterface;
 
     public function deactivateUser(int $id): UserEntityInterface;
 
     public function deleteUser(int $id): bool;
 
-    public function getActiveUsers(): array;
+    public function processAllUsers(callable $action): array;
+    
+    public function authenticateUserByEmail(string $email, string $password): ?UserEntityInterface;
+    
+    public function processUserById(int $id, callable $action);
 
-    public function getAllUsers(): array;
+    /**
+     * Atualiza usuário usando DTO puro (SRP + Tell Don't Ask)
+     */
+    public function updateUser(int $id, UpdateUserDataDTO $data): UserEntityInterface;
 
-    public function getInactiveUsers(): array;
+    public function saveUser(UserEntityInterface $user): UserEntityInterface;
 
-    public function getUserByEmail(string $email): ?UserEntityInterface;
-
-    public function getUserById(int $id): ?UserEntityInterface;
-
-    public function getUserCount(): int;
-
-    public function getUserCountByRole(string $role): int;
-
-    public function getUsersByRole(string $role): array;
-
-    public function isEmailAvailable(string $email, ?int $excludeId = null): bool;
+    public function validateEmailAvailability(string $email, ?int $excludeId = null): bool;
+    
+    public function generateUserStatistics(): array;
+    
+    public function processUsersByRole(string $role, callable $action): array;
+    
+    public function validateSystemCapacity(int $maxUsers = 1000): bool;
 
     public function searchUsersByName(string $name): array;
-
-    public function updateUser(int $id, array $data): UserEntityInterface;
 }

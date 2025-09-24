@@ -16,36 +16,78 @@ final class SoftDeletableBehavior implements SoftDeletableBehaviorInterface
         $this->deletedAt = $deletedAt;
     }
 
-    public function getDeletedAt(): ?DateTime
-    {
-        return $this->deletedAt;
-    }
-
-    public function setDeletedAt(?DateTime $deletedAt): self
-    {
-        $this->deletedAt = $deletedAt;
-        return $this;
-    }
-
+    /**
+     * Formata a data de exclusão
+     */
     public function getDeletedAtFormatted(string $format = 'Y-m-d H:i:s'): ?string
     {
         return $this->deletedAt ? $this->deletedAt->format($format) : null;
     }
 
+    /**
+     * Verifica se está excluído
+     */
     public function isDeleted(): bool
     {
         return $this->deletedAt !== null;
     }
 
+    /**
+     * Restaura o item (remove a exclusão lógica)
+     */
     public function restore(): self
     {
         $this->deletedAt = null;
         return $this;
     }
 
+    /**
+     * Realiza exclusão lógica
+     */
     public function softDelete(): self
     {
-        $this->deletedAt = new DateTime();
+        if (!$this->isDeleted()) {
+            $this->deletedAt = new DateTime();
+        }
         return $this;
+    }
+
+    /**
+     * Verifica se foi excluído recentemente (nas últimas 24 horas)
+     */
+    public function wasDeletedRecently(): bool
+    {
+        if (!$this->isDeleted()) {
+            return false;
+        }
+        
+        $oneDayAgo = (new DateTime())->modify('-1 day');
+        return $this->deletedAt > $oneDayAgo;
+    }
+
+    /**
+     * Calcula dias desde a exclusão
+     */
+    public function getDaysSinceDeletion(): int
+    {
+        if (!$this->isDeleted()) {
+            return 0;
+        }
+        
+        $now = new DateTime();
+        return (int) $this->deletedAt->diff($now)->days;
+    }
+
+    /**
+     * Verifica se pode ser restaurado (baseado em regras de negócio)
+     */
+    public function canBeRestored(): bool
+    {
+        if (!$this->isDeleted()) {
+            return false;
+        }
+        
+        // Exemplo: pode restaurar se foi excluído há menos de 30 dias
+        return $this->getDaysSinceDeletion() <= 30;
     }
 }

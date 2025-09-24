@@ -6,7 +6,7 @@ namespace App\Application\Modules\System\Console\Commands\Impl;
 
 use App\Application\Impl\ApiApplication;
 use App\Application\Modules\System\Console\Commands\CommandInterface;
-use App\Common\Database\DoctrineEntityManagerInterface;
+use App\Infrastructure\Common\Database\DoctrineEntityManagerInterface;
 use Exception;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;

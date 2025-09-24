@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace App\Domain\Security\Services\Impl;
 
-use App\Application\Common\DTOs\Auth\Impl\ChangePasswordRequestDTO;
-use App\Application\Common\DTOs\Auth\Impl\LoginRequestDTO;
-use App\Application\Common\DTOs\Impl\ValidationResult;
+use App\Domain\Auth\DTOs\Impl\ChangePasswordDataDTO;
+use App\Domain\Auth\DTOs\Impl\LoginDataDTO;
+use App\Domain\Auth\Commands\Impl\LoginCommand;
+use App\Domain\Auth\Commands\Impl\ChangePasswordCommand;
+use App\Application\Shared\DTOs\Impl\ValidationResult;
 use App\Domain\Common\Exceptions\Impl\ValidationException;
 use App\Domain\Security\Services\AuthValidationServiceInterface;
 use App\Domain\Security\Validators\AuthDataValidatorInterface;
@@ -21,7 +23,7 @@ final class AuthValidationService implements AuthValidationServiceInterface
         $this->authDataValidator = $authDataValidator;
     }
 
-    public function validateLoginRequest(ServerRequestInterface $request): LoginRequestDTO
+    public function validateLoginRequest(ServerRequestInterface $request): LoginDataDTO
     {
         $data = $request->getParsedBody();
         
@@ -30,10 +32,10 @@ final class AuthValidationService implements AuthValidationServiceInterface
             throw new ValidationException('Dados de login inválidos', $validation->getErrors());
         }
 
-        return LoginRequestDTO::fromArray($data);
+        return LoginDataDTO::fromArray($data);
     }
 
-    public function validateChangePasswordRequest(ServerRequestInterface $request): ChangePasswordRequestDTO
+    public function validateChangePasswordRequest(ServerRequestInterface $request): ChangePasswordDataDTO
     {
         $data = $request->getParsedBody();
         
@@ -42,7 +44,7 @@ final class AuthValidationService implements AuthValidationServiceInterface
             throw new ValidationException('Dados para alteração de senha inválidos', $validation->getErrors());
         }
 
-        return ChangePasswordRequestDTO::fromArray($data);
+        return ChangePasswordDataDTO::fromArray($data);
     }
 
     public function extractUserIdFromRequest(ServerRequestInterface $request, array $args): int
@@ -68,5 +70,31 @@ final class AuthValidationService implements AuthValidationServiceInterface
     public function validateUserId(int $id): ValidationResult
     {
         return $this->authDataValidator->validateUserId($id);
+    }
+
+    // ✅ COMMAND PATTERN: Retorna LoginCommand ao invés de DTO
+    public function validateLoginCommand(ServerRequestInterface $request): LoginCommand
+    {
+        $data = $request->getParsedBody();
+        
+        $validation = $this->authDataValidator->validateLoginData($data);
+        if (!$validation->isValid()) {
+            throw new ValidationException('Dados de login inválidos', $validation->getErrors());
+        }
+
+        return LoginCommand::fromArray($data);
+    }
+
+    // ✅ COMMAND PATTERN: Retorna ChangePasswordCommand ao invés de DTO
+    public function validateChangePasswordCommand(ServerRequestInterface $request): ChangePasswordCommand
+    {
+        $data = $request->getParsedBody();
+        
+        $validation = $this->authDataValidator->validateChangePasswordData($data);
+        if (!$validation->isValid()) {
+            throw new ValidationException('Dados para alteração de senha inválidos', $validation->getErrors());
+        }
+
+        return ChangePasswordCommand::fromArray($data);
     }
 }

@@ -22,42 +22,42 @@ class UserEntity implements UserEntityInterface, JsonSerializable
     /**
      * @ORM\Column(type="datetime")
      */
-    private DateTime $createdAt;
+    public DateTime $createdAt;
     /**
      * @ORM\Column(type="string", length=255, unique=true)
      */
-    private string $email;
+    public string $email;
     /**
      * @ORM\Id
      * @ORM\GeneratedValue
      * @ORM\Column(type="integer")
      */
-    private int $id;
+    public int $id;
     /**
      * @ORM\Column(type="string", length=255)
      */
-    private string $name;
+    public string $name;
     /**
      * @ORM\Column(type="string", length=255)
      */
-    private string $password;
+    public string $password;
     /**
      * @ORM\Column(type="string", length=50)
      */
-    private string $role;
+    public string $role;
     /**
      * @ORM\Column(type="string", length=20)
      */
-    private string $status;
+    public string $status;
     private TimestampableBehaviorInterface $timestampableBehavior;
     /**
      * @ORM\Column(type="datetime")
      */
-    private DateTime $updatedAt;
+    public DateTime $updatedAt;
     /**
      * @ORM\Column(type="string", length=36, nullable=true)
      */
-    private ?string $uuid = null;
+    public ?string $uuid = null;
     private UuidableBehaviorInterface $uuidableBehavior;
 
     public function __construct(
@@ -79,141 +79,46 @@ class UserEntity implements UserEntityInterface, JsonSerializable
         $this->status = $status;
         $this->createdAt = new DateTime();
         $this->updatedAt = new DateTime();
-        $this->uuid = $uuid ?? $this->generateUuid()->getUuid();
-    }
-
-    // Getters e Setters básicos
-
-    public function generateUuid(): self
-    {
-        $this->uuidableBehavior->generateUuid();
-        $this->uuid = $this->uuidableBehavior->getUuid();
-        return $this;
-    }
-
-    public function getCreatedAt(): DateTime
-    {
-        if (!isset($this->timestampableBehavior)) {
-            $this->timestampableBehavior = new TimestampableBehavior();
+        if ($uuid) {
+            $this->uuid = $uuid;
+        } else {
+            $this->generateUuid();
         }
-        return $this->timestampableBehavior->getCreatedAt();
     }
 
-    public function setCreatedAt(DateTime $createdAt): self
-    {
-        $this->createdAt = $createdAt;
-        $this->timestampableBehavior = new TimestampableBehavior($createdAt, $this->updatedAt);
-        return $this;
-    }
-
-    public function getCreatedAtFormatted(string $format = 'Y-m-d H:i:s'): string
-    {
-        return $this->timestampableBehavior->getCreatedAtFormatted($format);
-    }
-
-    public function getEmail(): string
-    {
-        return $this->email;
-    }
-
-    public function setEmail(string $email): self
-    {
-        $this->email = $email;
-        return $this;
-    }
-
+    /**
+     * Exceção: getId() necessário para compatibilidade com ORM/Doctrine
+     */
     public function getId(): int
     {
         return $this->id;
     }
 
-    public function setId(int $id): self
+    public function generateUuid(): self
     {
-        $this->id = $id;
-        return $this;
-    }
-
-    public function getName(): string
-    {
-        return $this->name;
-    }
-
-    public function setName(string $name): self
-    {
-        $this->name = $name;
-        return $this;
-    }
-
-    public function getPassword(): string
-    {
-        return $this->password;
-    }
-
-    public function setPassword(string $password): self
-    {
-        $this->password = password_hash($password, PASSWORD_DEFAULT);
-        return $this;
-    }
-
-    // Métodos de negócio
-
-    public function getRole(): string
-    {
-        return $this->role;
-    }
-
-    public function setRole(string $role): self
-    {
-        $this->role = $role;
-        return $this;
-    }
-
-    public function getStatus(): string
-    {
-        return $this->status;
-    }
-
-    // TimestampableInterface delegation
-
-    public function setStatus(string $status): self
-    {
-        $this->status = $status;
-        return $this;
-    }
-
-    public function getUpdatedAt(): DateTime
-    {
-        if (!isset($this->timestampableBehavior)) {
-            $this->timestampableBehavior = new TimestampableBehavior();
+        $this->uuidableBehavior->generateUuid();
+        // Acessar UUID através do behavior após geração
+        if ($this->uuidableBehavior->hasUuid()) {
+            // UUID foi gerado com sucesso
+            $this->uuid = $this->createUuid();
         }
-        return $this->timestampableBehavior->getUpdatedAt();
-    }
-
-    public function setUpdatedAt(DateTime $updatedAt): self
-    {
-        $this->updatedAt = $updatedAt;
-        $this->timestampableBehavior = new TimestampableBehavior($this->createdAt, $updatedAt);
         return $this;
     }
 
-    public function getUpdatedAtFormatted(string $format = 'Y-m-d H:i:s'): string
+    /**
+     * Cria um UUID versão 4 (aleatório)
+     */
+    private function createUuid(): string
     {
-        return $this->timestampableBehavior->getUpdatedAtFormatted($format);
-    }
-
-    public function getUuid(): ?string
-    {
-        if (!isset($this->uuidableBehavior)) {
-            $this->uuidableBehavior = new UuidableBehavior();
+        if (function_exists('uuid_create')) {
+            return uuid_create(UUID_TYPE_RANDOM);
         }
-        return $this->uuidableBehavior->getUuid();
-    }
 
-    public function setUuid(?string $uuid): self
-    {
-        $this->uuid = $uuid;
-        $this->uuidableBehavior = new UuidableBehavior($uuid);
-        return $this;
+        $data = random_bytes(16);
+        $data[6] = chr(ord($data[6]) & 0x0f | 0x40);
+        $data[8] = chr(ord($data[8]) & 0x3f | 0x80);
+
+        return vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($data), 4));
     }
 
     public function hasRole(string $role): bool
@@ -221,12 +126,11 @@ class UserEntity implements UserEntityInterface, JsonSerializable
         return $this->role === $role;
     }
 
-    // UuidableInterface delegation
-
     public function hasUuid(): bool
     {
         return $this->uuidableBehavior->hasUuid();
     }
+
 
     public function isActive(): bool
     {
@@ -234,6 +138,16 @@ class UserEntity implements UserEntityInterface, JsonSerializable
     }
 
     public function touch(): self
+    {
+        $this->timestampableBehavior->touch();
+        $this->updatedAt = new DateTime();
+        return $this;
+    }
+
+    /**
+     * Método interno da entidade para atualizar timestamp
+     */
+    private function touchEntity(): self
     {
         $this->updatedAt = new DateTime();
         $this->timestampableBehavior = new TimestampableBehavior($this->createdAt, $this->updatedAt);
@@ -245,16 +159,207 @@ class UserEntity implements UserEntityInterface, JsonSerializable
         return password_verify($password, $this->password);
     }
 
+    // Métodos comportamentais
+
+    /**
+     * Ativa o usuário
+     */
+    public function activate(): self
+    {
+        $this->status = 'active';
+        $this->touchEntity();
+        return $this;
+    }
+
+    /**
+     * Desativa o usuário
+     */
+    public function deactivate(): self
+    {
+        $this->status = 'inactive';
+        $this->touchEntity();
+        return $this;
+    }
+
+    /**
+     * Atualiza senha do usuário
+     */
+    public function updatePassword(string $newPassword): self
+    {
+        $this->password = password_hash($newPassword, PASSWORD_DEFAULT);
+        $this->touchEntity();
+        return $this;
+    }
+
+    /**
+     * Atualiza perfil do usuário
+     */
+    public function updateProfile(array $profileData): self
+    {
+        if (isset($profileData['name'])) {
+            $this->name = $profileData['name'];
+        }
+        if (isset($profileData['email'])) {
+            $this->email = $profileData['email'];
+        }
+        if (isset($profileData['role'])) {
+            $this->role = $profileData['role'];
+        }
+        
+        $this->touchEntity();
+        return $this;
+    }
+
+    /**
+     * Autentica usuário com senha
+     */
+    public function authenticate(string $password): bool
+    {
+        if (!$this->isActive()) {
+            return false;
+        }
+        
+        return $this->verifyPassword($password);
+    }
+
+    /**
+     * Verifica se usuário pode executar ação
+     */
+    public function canPerform(string $action): bool
+    {
+        if (!$this->isActive()) {
+            return false;
+        }
+
+        // Lógica de permissões baseada em roles
+        switch ($this->role) {
+            case 'admin':
+                return true; // Admin pode tudo
+            case 'user':
+                return in_array($action, ['view', 'edit_own']);
+            default:
+                return false;
+        }
+    }
+
+    /**
+     * Verifica se o usuário possui uma função específica
+     */
+    public function isAdmin(): bool
+    {
+        return $this->hasRole('admin');
+    }
+
+    /**
+     * Verifica se a senha precisa ser alterada (regra de negócio)
+     */
+    public function needsPasswordChange(): bool
+    {
+        // Exemplo: senha deve ser alterada após 90 dias
+        $ninetyDaysAgo = (new DateTime())->modify('-90 days');
+        return $this->updatedAt < $ninetyDaysAgo;
+    }
+
+    /**
+     * Verifica se o usuário pode ser promovido a administrador
+     */
+    public function canBePromotedToAdmin(): bool
+    {
+        return $this->isActive() && !$this->isAdmin();
+    }
+
+    /**
+     * Verifica se o perfil do usuário está completo
+     */
+    public function hasCompleteProfile(): bool
+    {
+        return !empty($this->name) && !empty($this->email) && !empty($this->role);
+    }
+
+    /**
+     * Verifica se é o mesmo usuário
+     */
+    public function isSameUser(UserEntityInterface $other): bool
+    {
+        return $this->id === $other->getId();
+    }
+
+    /**
+     * Verifica se o email pode ser alterado para o novo valor
+     */
+    public function canChangeEmailTo(string $newEmail): bool
+    {
+        return $this->email !== $newEmail && filter_var($newEmail, FILTER_VALIDATE_EMAIL) !== false;
+    }
+
+    // Implementação dos métodos TimestampableBehaviorInterface
+    public function getCreatedAtFormatted(string $format = 'Y-m-d H:i:s'): string
+    {
+        return $this->timestampableBehavior->getCreatedAtFormatted($format);
+    }
+
+    public function getUpdatedAtFormatted(string $format = 'Y-m-d H:i:s'): string
+    {
+        return $this->timestampableBehavior->getUpdatedAtFormatted($format);
+    }
+
+    public function wasCreatedRecently(): bool
+    {
+        return $this->timestampableBehavior->wasCreatedRecently();
+    }
+
+    public function wasUpdatedRecently(): bool
+    {
+        return $this->timestampableBehavior->wasUpdatedRecently();
+    }
+
+    public function neverUpdated(): bool
+    {
+        return $this->timestampableBehavior->neverUpdated();
+    }
+
+    public function getAgeInDays(): int
+    {
+        return $this->timestampableBehavior->getAgeInDays();
+    }
+
+    public function getDaysSinceUpdate(): int
+    {
+        return $this->timestampableBehavior->getDaysSinceUpdate();
+    }
+
+    // Implementação dos métodos UuidableBehaviorInterface
+    public function hasValidUuid(): bool
+    {
+        return $this->uuidableBehavior->hasValidUuid();
+    }
+
+    public function matchesUuid(string $otherUuid): bool
+    {
+        return $this->uuidableBehavior->matchesUuid($otherUuid);
+    }
+
+    public function regenerateUuid(): self
+    {
+        $this->uuidableBehavior->regenerateUuid();
+        $this->uuid = $this->createUuid();
+        return $this;
+    }
+
+    /**
+     * Serialização JSON usando acesso direto às propriedades
+     */
     public function jsonSerialize(): array
     {
         return [
-            'id' => $this->getId(),
-            'name' => $this->getName(),
-            'email' => $this->getEmail(),
-            'role' => $this->getRole(),
-            'uuid' => $this->getUuid(),
-            'created_at' => $this->getCreatedAt()->format('Y-m-d H:i:s'),
-            'updated_at' => $this->getUpdatedAt()->format('Y-m-d H:i:s'),
+            'id' => $this->id,
+            'name' => $this->name,
+            'email' => $this->email,
+            'role' => $this->role,
+            'status' => $this->status,
+            'uuid' => $this->uuid,
+            'created_at' => $this->createdAt->format('Y-m-d H:i:s'),
+            'updated_at' => $this->updatedAt->format('Y-m-d H:i:s'),
         ];
     }
 }

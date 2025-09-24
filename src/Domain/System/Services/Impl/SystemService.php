@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\System\Services\Impl;
 
-use App\Common\Database\DoctrineEntityManagerInterface;
+use App\Infrastructure\Common\Database\DoctrineEntityManagerInterface;
 use App\Domain\System\Services\SystemServiceInterface;
 use Doctrine\ORM\Version;
 use Exception;
@@ -157,7 +157,7 @@ final class SystemService implements SystemServiceInterface
                 $entities[] = [
                     'name' => $meta->getName(),
                     'table' => $meta->getTableName(),
-                    'fields' => array_keys($meta->getFieldNames()),
+                    'fields' => array_values($meta->getFieldNames()),
                 ];
             }
 

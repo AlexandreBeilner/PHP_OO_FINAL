@@ -8,17 +8,19 @@ use DateTime;
 
 interface TimestampableBehaviorInterface
 {
-    public function getCreatedAt(): DateTime;
-
-    public function getCreatedAtFormatted(string $format = 'Y-m-d H:i:s'): string;
-
-    public function getUpdatedAt(): DateTime;
-
-    public function getUpdatedAtFormatted(string $format = 'Y-m-d H:i:s'): string;
-
-    public function setCreatedAt(DateTime $createdAt): self;
-
-    public function setUpdatedAt(DateTime $updatedAt): self;
-
     public function touch(): self;
+    
+    public function getCreatedAtFormatted(string $format = 'Y-m-d H:i:s'): string;
+    
+    public function getUpdatedAtFormatted(string $format = 'Y-m-d H:i:s'): string;
+    
+    public function wasCreatedRecently(): bool;
+    
+    public function wasUpdatedRecently(): bool;
+    
+    public function neverUpdated(): bool;
+    
+    public function getAgeInDays(): int;
+    
+    public function getDaysSinceUpdate(): int;
 }

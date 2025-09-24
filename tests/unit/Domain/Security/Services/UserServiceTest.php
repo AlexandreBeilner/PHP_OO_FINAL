@@ -12,6 +12,8 @@ use App\Domain\Common\Exceptions\Impl\ValidationException;
 use App\Domain\Common\Exceptions\Impl\BusinessLogicExceptionAbstract;
 use App\Domain\Security\Entities\UserEntityInterface;
 use App\Domain\Security\Entities\Impl\UserEntity;
+use App\Domain\Security\DTOs\Impl\CreateUserDataDTO;
+use App\Domain\Security\DTOs\Impl\UpdateUserDataDTO;
 use App\Domain\Common\Impl\TimestampableBehavior;
 use App\Domain\Common\Impl\UuidableBehavior;
 
@@ -34,33 +36,35 @@ final class UserServiceTest extends TestCase
 
     public function testCreateUserSuccessfully(): void
     {
-        $name = 'John Doe';
-        $email = 'john@example.com';
-        $password = 'password123';
-        $role = 'user';
+        $dto = CreateUserDataDTO::fromArray([
+            'name' => 'John Doe',
+            'email' => 'john@example.com',
+            'password' => 'password123',
+            'role' => 'user'
+        ]);
 
         $this->mockEmailValidator->expects($this->once())
             ->method('validate')
-            ->with($email)
+            ->with('john@example.com')
             ->willReturn(true);
 
         $this->mockRepository->expects($this->once())
             ->method('findByEmail')
-            ->with($email)
+            ->with('john@example.com')
             ->willReturn(null);
 
         $this->mockRepository->expects($this->once())
             ->method('save')
             ->willReturnCallback(function ($user) {
                 $this->assertInstanceOf(UserEntity::class, $user);
-                $this->assertEquals('John Doe', $user->getName());
-                $this->assertEquals('john@example.com', $user->getEmail());
-                $this->assertEquals('user', $user->getRole());
-                $this->assertEquals('active', $user->getStatus());
+                $this->assertEquals('John Doe', $user->name);
+                $this->assertEquals('john@example.com', $user->email);
+                $this->assertEquals('user', $user->role);
+                $this->assertEquals('active', $user->status);
                 return $user;
             });
 
-        $result = $this->userService->createUser($name, $email, $password, $role);
+        $result = $this->userService->createUser($dto);
 
         $this->assertInstanceOf(UserEntityInterface::class, $result);
     }
@@ -79,7 +83,14 @@ final class UserServiceTest extends TestCase
         $this->expectException(ValidationException::class);
         $this->expectExceptionMessage('Invalid email format');
 
-        $this->userService->createUser('John Doe', 'invalid-email', 'password123', 'user');
+        $dto = CreateUserDataDTO::fromArray([
+            'name' => 'John Doe',
+            'email' => 'invalid-email',
+            'password' => 'password123',
+            'role' => 'user'
+        ]);
+
+        $this->userService->createUser($dto);
     }
 
     public function testCreateUserWithDuplicateEmail(): void
@@ -99,7 +110,14 @@ final class UserServiceTest extends TestCase
         $this->expectException(ValidationException::class);
         $this->expectExceptionMessage('Email \'john@example.com\' já está em uso');
 
-        $this->userService->createUser('John Doe', 'john@example.com', 'password123', 'user');
+        $dto = CreateUserDataDTO::fromArray([
+            'name' => 'John Doe',
+            'email' => 'john@example.com',
+            'password' => 'password123',
+            'role' => 'user'
+        ]);
+
+        $this->userService->createUser($dto);
     }
 
     public function testCreateUserWithShortPassword(): void
@@ -117,7 +135,14 @@ final class UserServiceTest extends TestCase
         $this->expectException(ValidationException::class);
         $this->expectExceptionMessage('Senha deve ter pelo menos 6 caracteres');
 
-        $this->userService->createUser('John Doe', 'john@example.com', '123', 'user');
+        $dto = CreateUserDataDTO::fromArray([
+            'name' => 'John Doe',
+            'email' => 'john@example.com',
+            'password' => '123',
+            'role' => 'user'
+        ]);
+
+        $this->userService->createUser($dto);
     }
 
     public function testCreateUserWithInvalidRole(): void
@@ -135,7 +160,14 @@ final class UserServiceTest extends TestCase
         $this->expectException(ValidationException::class);
         $this->expectExceptionMessage('Função inválida. Deve ser uma das: admin, user, moderator');
 
-        $this->userService->createUser('John Doe', 'john@example.com', 'password123', 'invalid_role');
+        $dto = CreateUserDataDTO::fromArray([
+            'name' => 'John Doe',
+            'email' => 'john@example.com',
+            'password' => 'password123',
+            'role' => 'invalid_role'
+        ]);
+
+        $this->userService->createUser($dto);
     }
 
     public function testGetUserById(): void
@@ -147,7 +179,7 @@ final class UserServiceTest extends TestCase
             ->with(1)
             ->willReturn($user);
 
-        $result = $this->userService->getUserById(1);
+        $result = $this->userService->processUserById(1, fn($user) => $user);
         $this->assertSame($user, $result);
     }
 
@@ -158,29 +190,34 @@ final class UserServiceTest extends TestCase
             ->with(999)
             ->willReturn(null);
 
-        $result = $this->userService->getUserById(999);
-        $this->assertNull($result);
+        // Verificar que exceção é lançada quando usuário não encontrado
+        $this->expectException(\App\Domain\Common\Exceptions\Impl\BusinessLogicExceptionAbstract::class);
+        $this->userService->processUserById(999, fn($user) => $user);
     }
 
     public function testGetUserByEmail(): void
     {
         $user = $this->createMock(UserEntityInterface::class);
         
+        $user->expects($this->once())
+            ->method('authenticate')
+            ->with('correct-password')
+            ->willReturn(true);
+
         $this->mockRepository->expects($this->once())
             ->method('findByEmail')
             ->with('john@example.com')
             ->willReturn($user);
 
-        $result = $this->userService->getUserByEmail('john@example.com');
+        // Como getUserByEmail foi removido, vamos testar authenticateUserByEmail
+        $result = $this->userService->authenticateUserByEmail('john@example.com', 'correct-password');
         $this->assertSame($user, $result);
     }
 
     public function testUpdateUser(): void
     {
         $user = $this->createMock(UserEntityInterface::class);
-        $user->expects($this->once())->method('setName')->with('John Updated');
-        $user->expects($this->once())->method('setRole')->with('admin');
-        $user->expects($this->once())->method('touch');
+        $user->expects($this->once())->method('updateProfile')->with(['name' => 'John Updated', 'role' => 'admin']);
 
         $this->mockRepository->expects($this->once())
             ->method('find')
@@ -192,10 +229,12 @@ final class UserServiceTest extends TestCase
             ->with($user)
             ->willReturn($user);
 
-        $result = $this->userService->updateUser(1, [
+        $dto = UpdateUserDataDTO::fromArray([
             'name' => 'John Updated',
             'role' => 'admin'
         ]);
+
+        $result = $this->userService->updateUser(1, $dto);
 
         $this->assertSame($user, $result);
     }
@@ -210,7 +249,11 @@ final class UserServiceTest extends TestCase
         $this->expectException(BusinessLogicExceptionAbstract::class);
         $this->expectExceptionMessage('Usuário com ID 999 não encontrado');
 
-        $this->userService->updateUser(999, ['name' => 'Updated Name']);
+        $dto = UpdateUserDataDTO::fromArray([
+            'name' => 'Updated Name'
+        ]);
+
+        $this->userService->updateUser(999, $dto);
     }
 
     public function testDeleteUser(): void
@@ -245,7 +288,7 @@ final class UserServiceTest extends TestCase
     public function testAuthenticateUser(): void
     {
         $user = $this->createMock(UserEntityInterface::class);
-        $user->expects($this->once())->method('getPassword')->willReturn(password_hash('password123', PASSWORD_DEFAULT));
+        $user->expects($this->once())->method('authenticate')->with('password123')->willReturn(true);
         
         $this->mockRepository->expects($this->once())
             ->method('findByEmail')
@@ -259,7 +302,7 @@ final class UserServiceTest extends TestCase
     public function testAuthenticateUserWithWrongPassword(): void
     {
         $user = $this->createMock(UserEntityInterface::class);
-        $user->expects($this->once())->method('getPassword')->willReturn(password_hash('password123', PASSWORD_DEFAULT));
+        $user->expects($this->once())->method('authenticate')->with('wrongpassword')->willReturn(false);
         
         $this->mockRepository->expects($this->once())
             ->method('findByEmail')
@@ -288,7 +331,7 @@ final class UserServiceTest extends TestCase
             ->with('available@example.com')
             ->willReturn(null);
 
-        $result = $this->userService->isEmailAvailable('available@example.com');
+        $result = $this->userService->validateEmailAvailability('available@example.com');
         $this->assertTrue($result);
     }
 
@@ -301,7 +344,7 @@ final class UserServiceTest extends TestCase
             ->with('taken@example.com')
             ->willReturn($user);
 
-        $result = $this->userService->isEmailAvailable('taken@example.com');
+        $result = $this->userService->validateEmailAvailability('taken@example.com');
         $this->assertFalse($result);
     }
 
@@ -315,7 +358,7 @@ final class UserServiceTest extends TestCase
             ->with('john@example.com')
             ->willReturn($user);
 
-        $result = $this->userService->isEmailAvailable('john@example.com', 1);
+        $result = $this->userService->validateEmailAvailability('john@example.com', 1);
         $this->assertTrue($result);
     }
 }

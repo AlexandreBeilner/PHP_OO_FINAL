@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace App\Domain\Security\Services\Impl;
 
 use App\Domain\Common\Exceptions\Impl\ValidationException;
+use App\Domain\Auth\DTOs\Impl\LoginDataDTO;
+use App\Domain\Auth\DTOs\Impl\ChangePasswordDataDTO;
+use App\Domain\Security\Entities\UserEntityInterface;
 use App\Domain\Security\Services\AuthServiceInterface;
 use App\Domain\Security\Services\UserServiceInterface;
 use Exception;
@@ -18,10 +21,50 @@ final class AuthService implements AuthServiceInterface
         $this->userService = $userService;
     }
 
-    public function authenticate(string $email, string $password): array
+    /**
+     * Autentica usando DTO puro (SRP + Tell Don't Ask)
+     */
+    public function authenticate(LoginDataDTO $credentials): ?UserEntityInterface
+    {
+        // Busca usuário por email usando propriedade readonly do DTO
+        $user = $this->userService->getUserByEmail($credentials->email);
+        if (!$user) {
+            return null;
+        }
+
+        // Usa comportamento da entidade (Tell, Don't Ask)
+        if ($user->authenticate($credentials->password)) {
+            return $user;
+        }
+
+        return null;
+    }
+
+    /**
+     * Altera senha usando DTO puro (SRP + Tell Don't Ask)
+     */
+    public function changePassword(ChangePasswordDataDTO $data): ?UserEntityInterface
+    {
+        // Busca usuário usando processUserById (que existe na interface)
+        $user = $this->userService->processUserById($data->userId, fn($user) => $user);
+        if (!$user) {
+            return null;
+        }
+
+        // Valida senha atual usando comportamento da entidade
+        if (!$user->authenticate($data->currentPassword)) {
+            return null; // Current password is incorrect
+        }
+        
+        // Atualiza senha usando comportamento da entidade (Tell, Don't Ask)
+        $user->updatePassword($data->newPassword);
+        
+        return $this->userService->saveUser($user);
+    }
+
+    public function authenticateWithResponse(string $email, string $password): array
     {
         try {
-            // Busca usuário por email
             $user = $this->userService->getUserByEmail($email);
 
             if (! $user) {
@@ -32,8 +75,7 @@ final class AuthService implements AuthServiceInterface
                 ];
             }
 
-            // Verifica senha (implementação básica - em produção usar password_hash)
-            if ($user->getPassword() !== $password) {
+            if (!$user->authenticate($password)) {
                 return [
                     'success' => false,
                     'message' => 'Senha incorreta',
@@ -44,8 +86,8 @@ final class AuthService implements AuthServiceInterface
             // Gera token
             $token = $this->generateToken([
                 'id' => $user->getId(),
-                'email' => $user->getEmail(),
-                'name' => $user->getName(),
+                'email' => $user->email ?? '',
+                'name' => $user->name ?? '',
             ]);
 
             return [
@@ -53,9 +95,9 @@ final class AuthService implements AuthServiceInterface
                 'message' => 'Autenticação realizada com sucesso',
                 'user' => [
                     'id' => $user->getId(),
-                    'email' => $user->getEmail(),
-                    'name' => $user->getName(),
-                    'created_at' => $user->getCreatedAt(),
+                    'email' => $user->email ?? '',
+                    'name' => $user->name ?? '',
+                    'created_at' => $user->createdAt,
                 ],
                 'token' => $token,
             ];
@@ -91,6 +133,10 @@ final class AuthService implements AuthServiceInterface
         return 'auth_' . $payload;
     }
 
+    /**
+     * @param array $data
+     * @return array<>
+     */
     public function validateAuthData(array $data): array
     {
         $errors = [];
@@ -163,5 +209,62 @@ final class AuthService implements AuthServiceInterface
                 'user' => null,
             ];
         }
+    }
+
+    // ✅ TELL, DON'T ASK: High-level behavioral methods for Auth
+    
+    /**
+     * Autentica e valida permissões - Tell, Don't Ask
+     */
+    public function authenticateWithPermissions(string $email, string $password, string $requiredAction): array
+    {
+        $user = $this->userService->getUserByEmail($email);
+        if (!$user) {
+            return [
+                'success' => false,
+                'message' => 'Usuário não encontrado',
+                'user' => null,
+                'canPerform' => false
+            ];
+        }
+        
+        if (!$user->authenticate($password)) {
+            return [
+                'success' => false,
+                'message' => 'Credenciais inválidas',
+                'user' => null,
+                'canPerform' => false
+            ];
+        }
+        
+        $canPerform = $user->canPerform($requiredAction);
+        
+        return [
+            'success' => true,
+            'message' => 'Autenticação realizada com sucesso',
+            'user' => $user,
+            'canPerform' => $canPerform,
+            'needsPasswordChange' => $user->needsPasswordChange()
+        ];
+    }
+
+    /**
+     * Força logout de usuários inativos - Tell, Don't Ask
+     */
+    public function logoutInactiveUsers(): array
+    {
+        // Em um sistema real, isso verificaria sessões ativas
+        $inactiveUsers = $this->userService->deactivateInactiveUsers();
+        
+        return [
+            'loggedOutUsers' => count($inactiveUsers),
+            'users' => array_map(function($user) {
+                return [
+                    'id' => $user->getId(),
+                    'email' => $user->email ?? '',
+                    'lastActivity' => $user->getUpdatedAt()
+                ];
+            }, $inactiveUsers)
+        ];
     }
 }

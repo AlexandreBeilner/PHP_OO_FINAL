@@ -7,6 +7,8 @@ namespace Tests\Integration\Domain\Security\Services;
 use Tests\Integration\AbstractBaseIntegrationTest;
 use App\Domain\Security\Services\UserServiceInterface;
 use App\Domain\Security\Entities\UserEntityInterface;
+use App\Domain\Security\DTOs\Impl\CreateUserDataDTO;
+use App\Domain\Security\DTOs\Impl\UpdateUserDataDTO;
 use App\Domain\Common\Exceptions\Impl\ValidationException;
 use App\Domain\Common\Exceptions\Impl\BusinessLogicExceptionAbstract;
 
@@ -22,22 +24,24 @@ final class UserServiceIntegrationTest extends AbstractBaseIntegrationTest
 
     public function testCreateUserSuccessfully(): void
     {
-        $user = $this->userService->createUser(
-            'John Doe',
-            'john.doe@example.com',
-            'password123',
-            'user'
-        );
+        $dto = CreateUserDataDTO::fromArray([
+            'name' => 'John Doe',
+            'email' => 'john.doe@example.com',
+            'password' => 'password123',
+            'role' => 'user'
+        ]);
+        
+        $user = $this->userService->createUser($dto);
 
         $this->assertInstanceOf(UserEntityInterface::class, $user);
-        $this->assertEquals('John Doe', $user->getName());
-        $this->assertEquals('john.doe@example.com', $user->getEmail());
-        $this->assertEquals('user', $user->getRole());
-        $this->assertEquals('active', $user->getStatus());
+        $this->assertEquals('John Doe', $user->name);
+        $this->assertEquals('john.doe@example.com', $user->email);
+        $this->assertEquals('user', $user->role);
+        $this->assertEquals('active', $user->status);
         $this->assertNotNull($user->getId());
-        $this->assertNotNull($user->getUuid());
-        $this->assertNotNull($user->getCreatedAt());
-        $this->assertNotNull($user->getUpdatedAt());
+        $this->assertNotNull($user->uuid);
+        $this->assertNotNull($user->createdAt);
+        $this->assertNotNull($user->updatedAt);
     }
 
     public function testCreateUserWithInvalidEmail(): void
@@ -45,34 +49,38 @@ final class UserServiceIntegrationTest extends AbstractBaseIntegrationTest
         $this->expectException(ValidationException::class);
         $this->expectExceptionMessage('Formato de email inválido: Formato de email inválido');
 
-        $this->userService->createUser(
-            'John Doe',
-            'invalid-email',
-            'password123',
-            'user'
-        );
+        $dto = CreateUserDataDTO::fromArray([
+            'name' => 'John Doe',
+            'email' => 'invalid-email',
+            'password' => 'password123',
+            'role' => 'user'
+        ]);
+
+        $this->userService->createUser($dto);
     }
 
     public function testCreateUserWithDuplicateEmail(): void
     {
         // Create first user
-        $this->userService->createUser(
-            'John Doe',
-            'john.doe@example.com',
-            'password123',
-            'user'
-        );
+        $firstDto = CreateUserDataDTO::fromArray([
+            'name' => 'John Doe',
+            'email' => 'john.doe@example.com',
+            'password' => 'password123',
+            'role' => 'user'
+        ]);
+        $this->userService->createUser($firstDto);
 
         // Try to create second user with same email
         $this->expectException(ValidationException::class);
         $this->expectExceptionMessage('Email \'john.doe@example.com\' já está em uso');
 
-        $this->userService->createUser(
-            'Jane Doe',
-            'john.doe@example.com',
-            'password456',
-            'user'
-        );
+        $secondDto = CreateUserDataDTO::fromArray([
+            'name' => 'Jane Doe',
+            'email' => 'john.doe@example.com',
+            'password' => 'password456',
+            'role' => 'user'
+        ]);
+        $this->userService->createUser($secondDto);
     }
 
     public function testCreateUserWithShortPassword(): void
@@ -80,12 +88,14 @@ final class UserServiceIntegrationTest extends AbstractBaseIntegrationTest
         $this->expectException(ValidationException::class);
         $this->expectExceptionMessage('Senha deve ter pelo menos 6 caracteres');
 
-        $this->userService->createUser(
-            'John Doe',
-            'john.doe@example.com',
-            '123',
-            'user'
-        );
+        $dto = CreateUserDataDTO::fromArray([
+            'name' => 'John Doe',
+            'email' => 'john.doe@example.com',
+            'password' => '123',
+            'role' => 'user'
+        ]);
+
+        $this->userService->createUser($dto);
     }
 
     public function testCreateUserWithInvalidRole(): void
@@ -93,64 +103,81 @@ final class UserServiceIntegrationTest extends AbstractBaseIntegrationTest
         $this->expectException(ValidationException::class);
         $this->expectExceptionMessage('Função inválida. Deve ser uma das: admin, user, moderator');
 
-        $this->userService->createUser(
-            'John Doe',
-            'john.doe@example.com',
-            'password123',
-            'invalid_role'
-        );
+        $dto = CreateUserDataDTO::fromArray([
+            'name' => 'John Doe',
+            'email' => 'john.doe@example.com',
+            'password' => 'password123',
+            'role' => 'invalid_role'
+        ]);
+
+        $this->userService->createUser($dto);
     }
 
     public function testGetUserById(): void
     {
-        $createdUser = $this->userService->createUser(
-            'John Doe',
-            'john.doe@example.com',
-            'password123',
-            'user'
-        );
+        $dto = CreateUserDataDTO::fromArray([
+            'name' => 'John Doe',
+            'email' => 'john.doe@example.com',
+            'password' => 'password123',
+            'role' => 'user'
+        ]);
+        $createdUser = $this->userService->createUser($dto);
 
-        $foundUser = $this->userService->getUserById($createdUser->getId());
+        $foundUser = $this->userService->processUserById($createdUser->getId(), fn($user) => $user);
 
         $this->assertInstanceOf(UserEntityInterface::class, $foundUser);
         $this->assertEquals($createdUser->getId(), $foundUser->getId());
-        $this->assertEquals('John Doe', $foundUser->getName());
-        $this->assertEquals('john.doe@example.com', $foundUser->getEmail());
+        $this->assertEquals('John Doe', $foundUser->name);
+        $this->assertEquals('john.doe@example.com', $foundUser->email);
     }
 
     public function testGetUserByEmail(): void
     {
-        $createdUser = $this->userService->createUser(
-            'John Doe',
-            'john.doe@example.com',
-            'password123',
-            'user'
-        );
+        $dto = CreateUserDataDTO::fromArray([
+            'name' => 'John Doe',
+            'email' => 'john.doe@example.com',
+            'password' => 'password123',
+            'role' => 'user'
+        ]);
+        $createdUser = $this->userService->createUser($dto);
 
-        $foundUser = $this->userService->getUserByEmail('john.doe@example.com');
+        // Buscar usuário por email usando authenticateUserByEmail sem senha (apenas para teste)
+        $foundUser = null;
+        try {
+            $foundUser = $this->userService->processAllUsers(function($user) {
+                return $user->email === 'john.doe@example.com' ? $user : null;
+            });
+            $foundUser = array_filter($foundUser)[0] ?? null;
+        } catch (\Exception $e) {
+            $foundUser = null;
+        }
 
         $this->assertInstanceOf(UserEntityInterface::class, $foundUser);
         $this->assertEquals($createdUser->getId(), $foundUser->getId());
-        $this->assertEquals('John Doe', $foundUser->getName());
+        $this->assertEquals('John Doe', $foundUser->name);
     }
 
     public function testUpdateUser(): void
     {
-        $user = $this->userService->createUser(
-            'John Doe',
-            'john.doe@example.com',
-            'password123',
-            'user'
-        );
+        $dto = CreateUserDataDTO::fromArray([
+            'name' => 'John Doe',
+            'email' => 'john.doe@example.com',
+            'password' => 'password123',
+            'role' => 'user'
+        ]);
+        
+        $user = $this->userService->createUser($dto);
 
-        $updatedUser = $this->userService->updateUser($user->getId(), [
+        $updateDto = UpdateUserDataDTO::fromArray([
             'name' => 'John Updated',
             'role' => 'admin'
         ]);
+        
+        $updatedUser = $this->userService->updateUser($user->getId(), $updateDto);
 
-        $this->assertEquals('John Updated', $updatedUser->getName());
-        $this->assertEquals('admin', $updatedUser->getRole());
-        $this->assertEquals('john.doe@example.com', $updatedUser->getEmail()); // Should remain unchanged
+        $this->assertEquals('John Updated', $updatedUser->name);
+        $this->assertEquals('admin', $updatedUser->role);
+        $this->assertEquals('john.doe@example.com', $updatedUser->email); // Should remain unchanged
     }
 
     public function testUpdateNonExistentUser(): void
@@ -158,23 +185,32 @@ final class UserServiceIntegrationTest extends AbstractBaseIntegrationTest
         $this->expectException(BusinessLogicExceptionAbstract::class);
         $this->expectExceptionMessage('Usuário com ID 99999 não encontrado');
 
-        $this->userService->updateUser(99999, ['name' => 'Updated Name']);
+        $updateDto = UpdateUserDataDTO::fromArray(['name' => 'Updated Name']);
+        $this->userService->updateUser(99999, $updateDto);
     }
 
     public function testDeleteUser(): void
     {
-        $user = $this->userService->createUser(
-            'John Doe',
-            'john.doe@example.com',
-            'password123',
-            'user'
-        );
+        $dto = CreateUserDataDTO::fromArray([
+            'name' => 'John Doe',
+            'email' => 'john.doe@example.com',
+            'password' => 'password123',
+            'role' => 'user'
+        ]);
+        
+        $user = $this->userService->createUser($dto);
 
         $userId = $user->getId();
         $result = $this->userService->deleteUser($userId);
 
         $this->assertTrue($result);
-        $this->assertNull($this->userService->getUserById($userId));
+        // Verificar se usuário foi deletado
+        try {
+            $this->userService->processUserById($userId, fn($user) => $user);
+            $this->fail('Usuário deveria ter sido deletado');
+        } catch (\App\Domain\Common\Exceptions\Impl\BusinessLogicExceptionAbstract $e) {
+            $this->assertTrue(true); // Usuário foi deletado corretamente
+        }
     }
 
     public function testDeleteNonExistentUser(): void
@@ -185,12 +221,14 @@ final class UserServiceIntegrationTest extends AbstractBaseIntegrationTest
 
     public function testAuthenticateUser(): void
     {
-        $user = $this->userService->createUser(
-            'John Doe',
-            'john.doe@example.com',
-            'password123',
-            'user'
-        );
+        $dto = CreateUserDataDTO::fromArray([
+            'name' => 'John Doe',
+            'email' => 'john.doe@example.com',
+            'password' => 'password123',
+            'role' => 'user'
+        ]);
+        
+        $user = $this->userService->createUser($dto);
 
         $authenticatedUser = $this->userService->authenticateUser('john.doe@example.com', 'password123');
 
@@ -200,12 +238,14 @@ final class UserServiceIntegrationTest extends AbstractBaseIntegrationTest
 
     public function testAuthenticateUserWithWrongPassword(): void
     {
-        $this->userService->createUser(
-            'John Doe',
-            'john.doe@example.com',
-            'password123',
-            'user'
-        );
+        $dto = CreateUserDataDTO::fromArray([
+            'name' => 'John Doe',
+            'email' => 'john.doe@example.com',
+            'password' => 'password123',
+            'role' => 'user'
+        ]);
+        
+        $this->userService->createUser($dto);
 
         $authenticatedUser = $this->userService->authenticateUser('john.doe@example.com', 'wrongpassword');
 
@@ -214,32 +254,36 @@ final class UserServiceIntegrationTest extends AbstractBaseIntegrationTest
 
     public function testActivateAndDeactivateUser(): void
     {
-        $user = $this->userService->createUser(
-            'John Doe',
-            'john.doe@example.com',
-            'password123',
-            'user'
-        );
+        $dto = CreateUserDataDTO::fromArray([
+            'name' => 'John Doe',
+            'email' => 'john.doe@example.com',
+            'password' => 'password123',
+            'role' => 'user'
+        ]);
+        
+        $user = $this->userService->createUser($dto);
 
         // Deactivate user
         $deactivatedUser = $this->userService->deactivateUser($user->getId());
-        $this->assertEquals('inactive', $deactivatedUser->getStatus());
+        $this->assertEquals('inactive', $deactivatedUser->status);
 
         // Activate user
         $activatedUser = $this->userService->activateUser($user->getId());
-        $this->assertEquals('active', $activatedUser->getStatus());
+        $this->assertEquals('active', $activatedUser->status);
     }
 
     public function testChangePassword(): void
     {
-        $user = $this->userService->createUser(
-            'John Doe',
-            'john.doe@example.com',
-            'password123',
-            'user'
-        );
+        $dto = CreateUserDataDTO::fromArray([
+            'name' => 'John Doe',
+            'email' => 'john.doe@example.com',
+            'password' => 'password123',
+            'role' => 'user'
+        ]);
+        
+        $user = $this->userService->createUser($dto);
 
-        $originalPassword = $user->getPassword();
+        // Password não é mais exposto - usando método authenticate() para validar
         $this->userService->changePassword($user->getId(), 'newpassword456');
 
         // Verify new password works (this will fetch fresh data)
@@ -254,11 +298,11 @@ final class UserServiceIntegrationTest extends AbstractBaseIntegrationTest
     public function testGetAllUsers(): void
     {
         // Create multiple users
-        $this->userService->createUser('User 1', 'user1@example.com', 'password123', 'user');
-        $this->userService->createUser('User 2', 'user2@example.com', 'password123', 'admin');
-        $this->userService->createUser('User 3', 'user3@example.com', 'password123', 'user');
+        $this->userService->createUser(CreateUserDataDTO::fromArray(['name' => 'User 1', 'email' => 'user1@example.com', 'password' => 'password123', 'role' => 'user']));
+        $this->userService->createUser(CreateUserDataDTO::fromArray(['name' => 'User 2', 'email' => 'user2@example.com', 'password' => 'password123', 'role' => 'admin']));
+        $this->userService->createUser(CreateUserDataDTO::fromArray(['name' => 'User 3', 'email' => 'user3@example.com', 'password' => 'password123', 'role' => 'user']));
 
-        $users = $this->userService->getAllUsers();
+        $users = $this->userService->processAllUsers(fn($user) => $user);
 
         $this->assertCount(3, $users);
         $this->assertContainsOnlyInstancesOf(UserEntityInterface::class, $users);
@@ -267,12 +311,12 @@ final class UserServiceIntegrationTest extends AbstractBaseIntegrationTest
     public function testGetUsersByRole(): void
     {
         // Create users with different roles
-        $this->userService->createUser('Admin 1', 'admin1@example.com', 'password123', 'admin');
-        $this->userService->createUser('User 1', 'user1@example.com', 'password123', 'user');
-        $this->userService->createUser('Admin 2', 'admin2@example.com', 'password123', 'admin');
+        $this->userService->createUser(CreateUserDataDTO::fromArray(['name' => 'Admin 1', 'email' => 'admin1@example.com', 'password' => 'password123', 'role' => 'admin']));
+        $this->userService->createUser(CreateUserDataDTO::fromArray(['name' => 'User 1', 'email' => 'user1@example.com', 'password' => 'password123', 'role' => 'user']));
+        $this->userService->createUser(CreateUserDataDTO::fromArray(['name' => 'Admin 2', 'email' => 'admin2@example.com', 'password' => 'password123', 'role' => 'admin']));
 
-        $adminUsers = $this->userService->getUsersByRole('admin');
-        $regularUsers = $this->userService->getUsersByRole('user');
+        $adminUsers = $this->userService->processUsersByRole('admin', fn($user) => $user);
+        $regularUsers = $this->userService->processUsersByRole('user', fn($user) => $user);
 
         $this->assertCount(2, $adminUsers);
         $this->assertCount(1, $regularUsers);
@@ -280,9 +324,9 @@ final class UserServiceIntegrationTest extends AbstractBaseIntegrationTest
 
     public function testSearchUsersByName(): void
     {
-        $this->userService->createUser('John Smith', 'john.smith@example.com', 'password123', 'user');
-        $this->userService->createUser('Jane Smith', 'jane.smith@example.com', 'password123', 'user');
-        $this->userService->createUser('Bob Johnson', 'bob.johnson@example.com', 'password123', 'user');
+        $this->userService->createUser(CreateUserDataDTO::fromArray(['name' => 'John Smith', 'email' => 'john.smith@example.com', 'password' => 'password123', 'role' => 'user']));
+        $this->userService->createUser(CreateUserDataDTO::fromArray(['name' => 'Jane Smith', 'email' => 'jane.smith@example.com', 'password' => 'password123', 'role' => 'user']));
+        $this->userService->createUser(CreateUserDataDTO::fromArray(['name' => 'Bob Johnson', 'email' => 'bob.johnson@example.com', 'password' => 'password123', 'role' => 'user']));
 
         $smithUsers = $this->userService->searchUsersByName('Smith');
         $johnUsers = $this->userService->searchUsersByName('Johnson');
@@ -293,22 +337,25 @@ final class UserServiceIntegrationTest extends AbstractBaseIntegrationTest
 
     public function testGetUserCount(): void
     {
-        $initialCount = $this->userService->getUserCount();
+        $initialStats = $this->userService->generateUserStatistics();
+        $initialCount = $initialStats['total'];
 
-        $this->userService->createUser('User 1', 'user1@example.com', 'password123', 'user');
-        $this->userService->createUser('User 2', 'user2@example.com', 'password123', 'admin');
+        $this->userService->createUser(CreateUserDataDTO::fromArray(['name' => 'User 1', 'email' => 'user1@example.com', 'password' => 'password123', 'role' => 'user']));
+        $this->userService->createUser(CreateUserDataDTO::fromArray(['name' => 'User 2', 'email' => 'user2@example.com', 'password' => 'password123', 'role' => 'admin']));
 
-        $newCount = $this->userService->getUserCount();
+        $newStats = $this->userService->generateUserStatistics();
+        $newCount = $newStats['total'];
 
         $this->assertEquals($initialCount + 2, $newCount);
     }
 
     public function testIsEmailAvailable(): void
     {
-        $user = $this->userService->createUser('John Doe', 'john@example.com', 'password123', 'user');
+        $dto = CreateUserDataDTO::fromArray(['name' => 'John Doe', 'email' => 'john@example.com', 'password' => 'password123', 'role' => 'user']);
+        $user = $this->userService->createUser($dto);
 
-        $this->assertFalse($this->userService->isEmailAvailable('john@example.com'));
-        $this->assertTrue($this->userService->isEmailAvailable('jane@example.com'));
-        $this->assertTrue($this->userService->isEmailAvailable('john@example.com', $user->getId())); // Exclude current user
+        $this->assertFalse($this->userService->validateEmailAvailability('john@example.com'));
+        $this->assertTrue($this->userService->validateEmailAvailability('jane@example.com'));
+        $this->assertTrue($this->userService->validateEmailAvailability('john@example.com', $user->getId())); // Exclude current user
     }
 }

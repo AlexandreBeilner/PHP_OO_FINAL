@@ -4,12 +4,26 @@ declare(strict_types=1);
 
 namespace App\Domain\Security\Services;
 
+use App\Domain\Security\Entities\UserEntityInterface;
+use App\Domain\Auth\DTOs\Impl\LoginDataDTO;
+use App\Domain\Auth\DTOs\Impl\ChangePasswordDataDTO;
+
 interface AuthServiceInterface
 {
     /**
-     * Autentica um usuário
+     * Autentica um usuário (método legado)
      */
-    public function authenticate(string $email, string $password): array;
+    public function authenticateWithResponse(string $email, string $password): array;
+
+    /**
+     * Autentica usando DTO puro (SRP + Tell Don't Ask)
+     */
+    public function authenticate(LoginDataDTO $credentials): ?UserEntityInterface;
+
+    /**
+     * Altera senha usando DTO puro (SRP + Tell Don't Ask)
+     */
+    public function changePassword(ChangePasswordDataDTO $data): ?UserEntityInterface;
 
     /**
      * Extrai ID da URL

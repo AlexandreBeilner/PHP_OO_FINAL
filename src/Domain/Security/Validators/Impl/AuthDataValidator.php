@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Security\Validators\Impl;
 
-use App\Application\Common\DTOs\Impl\ValidationResult;
+use App\Application\Shared\DTOs\Impl\ValidationResult;
 use App\Domain\Security\Validators\AuthDataValidatorInterface;
 
 final class AuthDataValidator implements AuthDataValidatorInterface

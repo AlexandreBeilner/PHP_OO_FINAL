@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Application\Modules\System\Controllers\Impl;
 
-use App\Application\Common\Controllers\Impl\AbstractBaseController;
+use App\Application\Shared\Controllers\Impl\AbstractBaseController;
 use App\Application\Modules\System\Controllers\SystemControllerInterface;
 use App\Domain\System\Services\SystemServiceInterface;
 use App\Domain\System\Services\SystemResponseServiceInterface;

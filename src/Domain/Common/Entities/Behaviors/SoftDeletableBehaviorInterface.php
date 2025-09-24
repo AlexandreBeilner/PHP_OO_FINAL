@@ -8,13 +8,17 @@ use DateTime;
 
 interface SoftDeletableBehaviorInterface
 {
-    public function getDeletedAt(): ?DateTime;
-
+    public function getDeletedAtFormatted(string $format = 'Y-m-d H:i:s'): ?string;
+    
     public function isDeleted(): bool;
-
+    
     public function restore(): self;
-
-    public function setDeletedAt(?DateTime $deletedAt): self;
-
+    
     public function softDelete(): self;
+    
+    public function wasDeletedRecently(): bool;
+    
+    public function getDaysSinceDeletion(): int;
+    
+    public function canBeRestored(): bool;
 }

@@ -6,7 +6,7 @@ namespace Tests\Integration;
 
 use PHPUnit\Framework\TestCase;
 use App\Application\ApplicationInterface;
-use App\Common\Database\DoctrineEntityManagerInterface;
+use App\Infrastructure\Common\Database\DoctrineEntityManagerInterface;
 use Doctrine\DBAL\Connection;
 
 abstract class AbstractBaseIntegrationTest extends TestCase
@@ -22,11 +22,18 @@ abstract class AbstractBaseIntegrationTest extends TestCase
         $this->connection = $this->doctrineManager->getMaster()->getConnection();
         
         $this->setUpDatabase();
+        $this->cleanDatabase();
+        
+        // Iniciar transação para isolar cada teste
+        $this->connection->beginTransaction();
     }
 
     protected function tearDown(): void
     {
-        $this->cleanupDatabase();
+        // Rollback da transação para limpar dados do teste
+        if ($this->connection->isTransactionActive()) {
+            $this->connection->rollBack();
+        }
     }
 
     private function setUpDatabase(): void
@@ -46,11 +53,15 @@ abstract class AbstractBaseIntegrationTest extends TestCase
             )
         ");
     }
-
-    private function cleanupDatabase(): void
+    
+    private function cleanDatabase(): void
     {
-        // Clean up test data
-        $this->connection->executeStatement("DELETE FROM users WHERE email LIKE '%@example.com'");
+        // Limpar dados órfãos antes de cada teste
+        try {
+            $this->connection->executeStatement("DELETE FROM users");
+        } catch (\Exception $e) {
+            // Se a tabela não existir, ignorar o erro
+        }
     }
 
     protected function createTestUser(string $name, string $email, string $password, string $role = 'user'): int

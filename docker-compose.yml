@@ -344,7 +344,7 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
-
+  
   #################################################### Serviços PostgreSQL ###############################################
   postgres_primary:
     image: postgres:16.1
@@ -427,3 +427,12 @@ volumes:
   postgres_data:
   postgres_slave1_data:
   postgres_slave2_data:
+
+
+
+
+
+   
+  
+  
+  

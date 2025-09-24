@@ -10,6 +10,20 @@ use App\Application\Modules\System\Console\Commands\Impl\AppInfoCommand;
 use App\Application\Modules\System\Console\Commands\Impl\CacheClearCommand;
 use App\Application\Modules\System\Console\Commands\Impl\DatabaseTestCommand;
 use App\Application\Modules\System\Console\Commands\Impl\DoctrineTestCommand;
+use Doctrine\Migrations\DependencyFactory;
+use Doctrine\Migrations\Tools\Console\Command\CurrentCommand;
+use Doctrine\Migrations\Tools\Console\Command\DiffCommand;
+use Doctrine\Migrations\Tools\Console\Command\DumpSchemaCommand;
+use Doctrine\Migrations\Tools\Console\Command\ExecuteCommand;
+use Doctrine\Migrations\Tools\Console\Command\GenerateCommand;
+use Doctrine\Migrations\Tools\Console\Command\LatestCommand;
+use Doctrine\Migrations\Tools\Console\Command\ListCommand;
+use Doctrine\Migrations\Tools\Console\Command\MigrateCommand;
+use Doctrine\Migrations\Tools\Console\Command\RollupCommand;
+use Doctrine\Migrations\Tools\Console\Command\StatusCommand;
+use Doctrine\Migrations\Tools\Console\Command\SyncMetadataCommand;
+use Doctrine\Migrations\Tools\Console\Command\UpToDateCommand;
+use Doctrine\Migrations\Tools\Console\Command\VersionCommand;
 use Symfony\Component\Console\Application as SymfonyApplication;
 
 final class ConsoleApplication extends SymfonyApplication implements ConsoleApplicationInterface
@@ -29,6 +43,32 @@ final class ConsoleApplication extends SymfonyApplication implements ConsoleAppl
         return $this->app;
     }
 
+    private function addMigrationsCommands(): void
+    {
+        try {
+            // Obter DependencyFactory das migrations via DI
+            $dependencyFactory = $this->app->container()->get(DependencyFactory::class);
+            
+            // Comandos nativos do Doctrine Migrations
+            $this->add(new CurrentCommand($dependencyFactory));
+            $this->add(new DumpSchemaCommand($dependencyFactory));
+            $this->add(new ExecuteCommand($dependencyFactory));
+            $this->add(new GenerateCommand($dependencyFactory));
+            $this->add(new LatestCommand($dependencyFactory));
+            $this->add(new ListCommand($dependencyFactory));
+            $this->add(new MigrateCommand($dependencyFactory));
+            $this->add(new RollupCommand($dependencyFactory));
+            $this->add(new StatusCommand($dependencyFactory));
+            $this->add(new SyncMetadataCommand($dependencyFactory));
+            $this->add(new UpToDateCommand($dependencyFactory));
+            $this->add(new VersionCommand($dependencyFactory));
+            
+        } catch (\Exception $e) {
+            // Se não conseguir carregar migrations, continua sem os comandos
+            // Permite que a aplicação funcione mesmo com problemas na configuração
+        }
+    }
+
     private function addModuleCommands(): void
     {
         // Aqui os alunos podem adicionar comandos específicos de seus módulos
@@ -44,6 +84,9 @@ final class ConsoleApplication extends SymfonyApplication implements ConsoleAppl
         $this->add(new DoctrineTestCommand());
         $this->add(new CacheClearCommand());
         $this->add(new AppInfoCommand());
+        
+        // Comandos nativos do Doctrine Migrations
+        $this->addMigrationsCommands();
 
         // Comandos de módulos (serão adicionados pelos alunos)
         $this->addModuleCommands();

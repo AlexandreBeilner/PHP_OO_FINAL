@@ -7,8 +7,12 @@ namespace App\Domain\Common\Entities\Behaviors;
 interface UuidableBehaviorInterface
 {
     public function generateUuid(): self;
-
-    public function getUuid(): ?string;
-
-    public function setUuid(string $uuid): self;
+    
+    public function hasUuid(): bool;
+    
+    public function hasValidUuid(): bool;
+    
+    public function matchesUuid(string $otherUuid): bool;
+    
+    public function regenerateUuid(): self;
 }

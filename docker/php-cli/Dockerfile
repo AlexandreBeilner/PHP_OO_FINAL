@@ -23,6 +23,7 @@ RUN curl -sSLo sury.sh https://packages.sury.org/php/README.txt \
   && chmod +x sury.sh \
   && sh sury.sh \
   && apt-get install --no-install-recommends --no-install-suggests -y \
+      php${PHP_VERSION}-apcu \
       php${PHP_VERSION}-cli \
       php${PHP_VERSION}-mbstring \
       php${PHP_VERSION}-memcached \
@@ -31,7 +32,6 @@ RUN curl -sSLo sury.sh https://packages.sury.org/php/README.txt \
       php${PHP_VERSION}-xdebug \
       php${PHP_VERSION}-xml \
       php${PHP_VERSION}-zip \
-      php${PHP_VERSION}-apcu \
   && apt-get clean  \
   && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
@@ -40,8 +40,7 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 # Copia configurações de desenvolvimento para o PHP
 COPY dev.ini /etc/php/${PHP_VERSION}/mods-available/dev.ini
-
-COPY apcu.ini /etc/php/${PHP_VERSION}/mods-available/apcu.ini
+COPY apcu.ini /etc/php/7.4/mods-available/apcu.ini
 
 # Ativa o módulo de configurações de desenvolvimento
 RUN phpenmod dev apcu

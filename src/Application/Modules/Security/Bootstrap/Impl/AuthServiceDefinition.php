@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Application\Modules\Security\Bootstrap\Impl;
 
-use App\Application\Modules\Common\Bootstrap\ServiceDefinitionInterface;
+use App\Application\Shared\ServiceDefinitionInterface;
 use App\Domain\Security\Services\AuthServiceInterface;
 use App\Domain\Security\Services\Impl\AuthService;
 use App\Domain\Security\Services\UserServiceInterface;

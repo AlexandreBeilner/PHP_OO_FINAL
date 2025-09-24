@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Application\Modules\System\Bootstrap\Impl;
 
-use App\Application\Modules\Common\Bootstrap\ServiceDefinitionInterface;
+use App\Application\Shared\ServiceDefinitionInterface;
 use App\Application\Modules\System\Controllers\Impl\SystemController;
 use App\Application\Modules\System\Controllers\SystemControllerInterface;
 use App\Domain\System\Services\SystemServiceInterface;

@@ -5,9 +5,13 @@ declare(strict_types=1);
 namespace App\Application\Impl;
 
 use App\Application\ApplicationInterface;
-use App\Application\Common\Http\Impl\SlimAppFactory;
-use App\Application\Common\Http\SlimAppFactoryInterface;
-use App\Application\Modules\Common\Bootstrap\Impl\BootstrapManager;
+use App\Application\Shared\Http\Impl\SlimAppFactory;
+use App\Application\Shared\Http\SlimAppFactoryInterface;
+use App\Application\Shared\Orchestrator\BootstrapOrchestratorInterface;
+use App\Application\Shared\Registry\Impl\BootstrapRegistry;
+use App\Application\Shared\Loader\Impl\BootstrapLoader;
+use App\Application\Shared\Loader\Impl\RouteLoader;
+use App\Application\Shared\Orchestrator\Impl\BootstrapOrchestrator;
 use DI\Container;
 use DI\ContainerBuilder;
 use Slim\App;
@@ -70,9 +74,14 @@ final class ApiApplication implements ApplicationInterface
         // Cache de definições desabilitado (APCu não disponível)
         // $builder->enableDefinitionCache();
 
-        // Carregar definições dos serviços usando BootstrapManager
-        $bootstrapManager = new BootstrapManager();
-        $bootstrapManager->loadAll($builder);
+        // Carregar definições dos serviços usando BootstrapOrchestrator
+        $orchestrator = new BootstrapOrchestrator(
+            new BootstrapRegistry(),
+            new BootstrapLoader(),
+            new RouteLoader()
+        );
+        $orchestrator->initializeDefaultBootstraps();
+        $orchestrator->loadAllServices($builder);
 
         $this->container = $builder->build();
     }

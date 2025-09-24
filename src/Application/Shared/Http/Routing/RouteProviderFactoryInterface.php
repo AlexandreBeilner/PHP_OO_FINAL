@@ -25,4 +25,9 @@ interface RouteProviderFactoryInterface
      * Cria RouteProvider para o módulo Security
      */
     public function createSecurityRouteProvider(): RouteProviderInterface;
+
+    /**
+     * Cria RouteProvider para o módulo Security
+     */
+    public function createProductsRouteProvider(): RouteProviderInterface;
 }

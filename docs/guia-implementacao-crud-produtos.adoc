@@ -14,13 +14,13 @@ Este documento apresenta um **passo a passo detalhado** para implementação de 
 
 [IMPORTANT]
 ====
-**Para Iniciantes**: Este guia é **conceitual** e **educativo**. Não contém código específico, mas sim os passos e conceitos necessários para implementar cada componente. O foco está no **processo de pensamento** e na **estrutura arquitetural**.
+Este guia é **conceitual**. Não contém código específico, mas sim os passos e conceitos necessários para implementar cada componente seguindo Clean Architecture e Domain-Driven Design.
 ====
 
 === Objetivos do Guia
 
 - ✅ **Replicar padrões** existentes na aplicação
-- ✅ **Consolidar aprendizado** através da prática
+- ✅ **Aplicar conceitos** através da prática
 - ✅ **Implementar Clean Architecture** e **DDD**
 - ✅ **Seguir Object Calisthenics** e **SOLID**
 - ✅ **Criar API REST** padronizada
@@ -29,7 +29,7 @@ Este documento apresenta um **passo a passo detalhado** para implementação de 
 
 [TIP]
 ====
-**Para Iniciantes**:
+**Recomendações**:
 1. **Leia cada fase completamente** antes de começar a implementar
 2. **Compare sempre com o módulo Users** existente como referência
 3. **Implemente passo a passo**, não pule etapas
@@ -141,21 +141,44 @@ src/Application/Modules/Products/
 
 === Passo 1.2: Identificar Dependências
 
-==== Dependências Necessárias
-- **AbstractRepository**: Para herança do repositório base
-- **AbstractService**: Para herança do service base  
-- **AbstractBaseController**: Para herança do controller base
-- **AbstractBootstrap**: Para configuração do módulo
-- **ValidatorInterface**: Para validação de dados
-- **RouteProviderInterface**: Para roteamento
-- **Doctrine ORM**: Para persistência
+==== Dependências Necessárias (Localização)
+- **AbstractRepository**: `src/Domain/Common/Repositories/Impl/AbstractRepository.php`
+- **AbstractRepositoryInterface**: `src/Domain/Common/Repositories/AbstractRepositoryInterface.php`
+- **AbstractService**: `src/Domain/Common/Services/Impl/AbstractService.php`
+- **AbstractServiceInterface**: `src/Domain/Common/Services/AbstractServiceInterface.php`
+- **AbstractBaseController**: `src/Application/Shared/Controllers/Impl/AbstractBaseController.php`
+- **AbstractBootstrap**: `src/Application/Shared/Impl/AbstractBootstrap.php`
+- **TimestampableBehavior**: `src/Domain/Common/Entities/Behaviors/Impl/TimestampableBehavior.php`
+- **Doctrine ORM**: Para persistência de dados
+
+[TIP]
+====
+**Referências**: Antes de implementar qualquer classe, sempre **examine as referências existentes**:
+
+1. **UserEntity** → `src/Domain/Security/Entities/Impl/UserEntity.php`
+2. **UserRepository** → `src/Domain/Security/Repositories/Impl/UserRepository.php`
+3. **UserService** → `src/Domain/Security/Services/Impl/UserService.php`
+4. **UserController** → `src/Application/Modules/Security/Controllers/Impl/UserController.php`
+
+Use estes arquivos como **template** para entender a estrutura!
+====
 
 ==== Interfaces a Implementar
 - ProductEntityInterface
-- ProductServiceInterface
+- ProductServiceInterface  
 - ProductRepositoryInterface
 - ProductControllerInterface
 - ProductDataValidatorInterface
+
+==== Comando Para Examinar Estrutura de Referência
+```bash
+# Ver estrutura do módulo Users (referência)
+tree src/Domain/Security/
+tree src/Application/Modules/Security/
+
+# Ver exemplo de Repository
+cat src/Domain/Security/Repositories/Impl/UserRepository.php
+```
 
 == FASE 2: Camada de Domínio (Domain)
 
@@ -218,6 +241,26 @@ Criar interface com métodos principais da entidade:
 **Repository Pattern**: O repositório abstrai o acesso aos dados. O service não precisa saber se os dados vêm do banco, arquivo, API, etc. O repositório "esconde" essa complexidade.
 ====
 
+[IMPORTANT]
+====
+**Referência**: **SEMPRE examine primeiro o UserRepository** para entender como implementar:
+
+```bash
+# Ver a interface do UserRepository
+cat src/Domain/Security/Repositories/UserRepositoryInterface.php
+
+# Ver a implementação do UserRepository  
+cat src/Domain/Security/Repositories/Impl/UserRepository.php
+```
+
+**Pontos-chave a observar:**
+1. Como a interface estende `AbstractRepositoryInterface`
+2. Como a implementação estende `AbstractRepository`
+3. O método `getEntityClass()` - **obrigatório!**
+4. Imports necessários no topo do arquivo
+5. Namespace correto
+====
+
 ==== 2.2.1: Definir Interface
 Métodos específicos para produtos além dos padrão (CRUD básico):
 
@@ -226,13 +269,48 @@ Métodos específicos para produtos além dos padrão (CRUD básico):
 - `findByPriceRange()` - Buscar produtos em faixa de preço
 - `searchByName()` - Buscar produtos por nome
 
+**Template da Interface:**
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace App\Domain\Products\Repositories;
+
+use App\Domain\Common\Repositories\AbstractRepositoryInterface;
+use App\Domain\Products\Entities\ProductEntityInterface;
+
+interface ProductRepositoryInterface extends AbstractRepositoryInterface
+{
+    public function findByCategory(string $category): array;
+    // ... outros métodos
+}
+```
+
 ==== 2.2.2: Implementar Repository
 **Herança:** O repositório vai estender o repositório base existente
 
+**Imports obrigatórios:**
+```php
+use App\Domain\Common\Repositories\Impl\AbstractRepository;
+use App\Domain\Products\Entities\Impl\ProductEntity;
+use App\Domain\Products\Repositories\ProductRepositoryInterface;
+use Doctrine\ORM\EntityManagerInterface;
+```
+
+**Método obrigatório:**
+```php
+protected function getEntityClass(): string
+{
+    return ProductEntity::class;
+}
+```
+
 **O que precisa implementar:**
+- Construtor que chama `parent::__construct($entityManager)`
 - Definir qual entidade este repositório gerencia (ProductEntity)
 - Criar métodos específicos para consultas de produtos
-- Implementar filtros e buscas personalizadas
+- Implementar filtros e buscas personalizadas usando `$this->findBy()` ou `$this->createQueryBuilder()`
 
 === Passo 2.3: Criar DTOs
 
@@ -882,9 +960,153 @@ Content-Type: application/json
 - [ ] README atualizado
 - [ ] Códigos de status documentados
 
+== Testes da Implementação
+
+Após implementação completa, executar os testes para validar funcionamento.
+
+=== Preparação para Testes
+
+**1. Verificar se o servidor está rodando:**
+```bash
+curl -X GET "http://localhost:8080/health" -H "Content-Type: application/json"
+```
+*Deve retornar status 200 com informações do sistema*
+
+**2. Confirmar que a migration foi executada:**
+- Verificar se a tabela `products` existe no banco
+- Confirmar se possui todas as colunas necessárias
+
+=== Testes dos Endpoints CRUD
+
+**IMPORTANTE:** Todos os testes devem ser feitos com o cabeçalho `Content-Type: application/json`
+
+==== 1. Testar Listagem (GET /api/products)
+```bash
+curl -X GET "http://localhost:8080/api/products" -H "Content-Type: application/json" -s
+```
+
+*Resultado esperado:*
+- **Status Code:** 200
+- **JSON Response:** Array de produtos (pode estar vazio inicialmente)
+- **Estrutura:** `{"success": true, "data": [...], "message": "...", "code": 200}`
+
+==== 2. Testar Criação (POST /api/products)
+```bash
+curl -X POST "http://localhost:8080/api/products" \
+     -H "Content-Type: application/json" \
+     -d '{"name":"Produto Teste","price":29.90,"category":"Eletrônicos","status":"active"}' -s
+```
+
+*Resultado esperado:*
+- **Status Code:** 201
+- **JSON Response:** Produto criado com todos os campos
+- **Campos retornados:** id, uuid, name, price, category, status, createdAt, updatedAt
+
+==== 3. Testar Busca por ID (GET /api/products/{id})
+```bash
+# Usar o ID retornado na criação
+curl -X GET "http://localhost:8080/api/products/1" -H "Content-Type: application/json" -s
+```
+
+*Resultado esperado:*
+- **Status Code:** 200 (se existe) ou 404 (se não existe)
+- **JSON Response:** Dados completos do produto
+
+==== 4. Testar Atualização (PUT /api/products/{id})
+```bash
+curl -X PUT "http://localhost:8080/api/products/1" \
+     -H "Content-Type: application/json" \
+     -d '{"name":"Produto Atualizado","price":39.90}' -s
+```
+
+*Resultado esperado:*
+- **Status Code:** 200
+- **JSON Response:** Produto com dados atualizados
+- **Verificação:** `updatedAt` deve ser diferente de `createdAt`
+
+==== 5. Testar Exclusão (DELETE /api/products/{id})
+```bash
+curl -X DELETE "http://localhost:8080/api/products/1" -H "Content-Type: application/json" -s
+```
+
+*Resultado esperado:*
+- **Status Code:** 204 ou 200
+- **JSON Response:** Mensagem de confirmação
+
+=== Testes de Validação
+
+**1. Teste com dados inválidos (deve retornar 422):**
+```bash
+curl -X POST "http://localhost:8080/api/products" \
+     -H "Content-Type: application/json" \
+     -d '{"name":"","price":-10,"category":""}' -s
+```
+
+**2. Teste sem Content-Type (deve retornar 400):**
+```bash
+curl -X POST "http://localhost:8080/api/products" -d '{"name":"teste"}' -s
+```
+
+**3. Teste de produto inexistente (deve retornar 404):**
+```bash
+curl -X GET "http://localhost:8080/api/products/99999" -H "Content-Type: application/json" -s
+```
+
+=== Verificação de JSON Válido
+
+Verificação de JSON válido:
+```bash
+# Linux/Mac com python
+curl -X GET "http://localhost:8080/api/products" -H "Content-Type: application/json" -s | python3 -c "
+import sys, json
+try:
+    data = json.loads(sys.stdin.read())
+    print('✅ JSON válido!')
+    print(json.dumps(data, indent=2))
+except Exception as e:
+    print('❌ JSON inválido:', str(e))
+"
+```
+
+=== Checklist de Testes Completos
+
+Após implementação, verificar:
+
+- [ ] ✅ GET /api/products retorna 200 e array válido
+- [ ] ✅ POST /api/products com dados válidos retorna 201
+- [ ] ✅ POST /api/products com dados inválidos retorna 422
+- [ ] ✅ GET /api/products/{id} existente retorna 200
+- [ ] ✅ GET /api/products/{id} inexistente retorna 404  
+- [ ] ✅ PUT /api/products/{id} com dados válidos retorna 200
+- [ ] ✅ DELETE /api/products/{id} retorna 204
+- [ ] ✅ Todas as respostas são JSON válidos
+- [ ] ✅ Dados persistem corretamente no banco
+- [ ] ✅ Validações funcionam conforme regras
+- [ ] ✅ Timestamps são atualizados corretamente
+
+=== Solução de Problemas Comuns
+
+**1. Erro 500 - "Class not found":**
+- Verificar se todas as classes foram criadas
+- Confirmar se o Bootstrap foi registrado no `BootstrapOrchestrator`
+- Verificar namespaces e imports
+
+**2. Erro 404 - "Not found":**
+- Confirmar se as rotas foram registradas
+- Verificar se `ProductsRouteProvider` está funcionando
+- Testar outros endpoints para confirmar que o servidor está funcionando
+
+**3. JSON inválido ou duplicado:**
+- Verificar se o middleware UTF-8 não está duplicando conteúdo
+- Confirmar se os controllers retornam JSON válido
+
+**4. Erro de validação inesperado:**
+- Verificar se `ProductDataValidator` está implementado corretamente
+- Confirmar regras de validação nos DTOs
+
 == Resultado Final
 
-Após seguir todos os passos deste guia, você terá:
+Após implementação completa:
 
 ✅ **CRUD completo** de produtos funcionando  
 ✅ **API REST** com 5 endpoints padronizados  
@@ -894,7 +1116,7 @@ Após seguir todos os passos deste guia, você terá:
 ✅ **Tratamento de erros** padronizado  
 ✅ **Documentação** completa da API  
 
-O módulo de produtos será uma **réplica fiel** do módulo de usuários, consolidando o aprendizado dos padrões arquiteturais através da prática! 🚀
+O módulo de produtos será uma **réplica fiel** do módulo de usuários, aplicando os mesmos padrões arquiteturais! 🚀
 
 ---
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Application\Shared\Orchestrator\Impl;
 
+use App\Application\Modules\Products\Bootstrap\Impl\ProductsBootstrap;
 use App\Application\Shared\Orchestrator\BootstrapOrchestratorInterface;
 use App\Application\Shared\Registry\BootstrapRegistryInterface;
 use App\Application\Shared\Loader\BootstrapLoaderInterface;
@@ -60,5 +61,6 @@ final class BootstrapOrchestrator implements BootstrapOrchestratorInterface
         $this->registerBootstrap(new AuthBootstrap());
         $this->registerBootstrap(new SecurityBootstrap());
         $this->registerBootstrap(new ApplicationBootstrap());
+        $this->registerBootstrap(new ProductsBootstrap());
     }
 }

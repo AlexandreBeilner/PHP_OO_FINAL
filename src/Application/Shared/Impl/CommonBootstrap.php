@@ -32,6 +32,12 @@ final class CommonBootstrap extends AbstractBootstrap implements BootstrapInterf
             
             // RouteProvider Factory para DIP
             \App\Application\Shared\Impl\RouteProviderFactoryDefinition::class,
+            
+            // Entity Path Services para modularidade
+            \App\Application\Shared\Impl\EntityPathServiceDefinition::class,
+            
+            // BootstrapOrchestrator para DI
+            \App\Application\Shared\Impl\BootstrapOrchestratorServiceDefinition::class,
         ];
 
         $this->loadServiceDefinitions($builder, $definitions);

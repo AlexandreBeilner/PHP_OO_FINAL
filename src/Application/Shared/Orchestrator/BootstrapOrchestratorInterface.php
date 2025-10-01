@@ -34,4 +34,11 @@ interface BootstrapOrchestratorInterface
      * Inicializa com bootstraps padrão do sistema
      */
     public function initializeDefaultBootstraps(): void;
+
+    /**
+     * Coleta todos os entity paths de todos os bootstraps registrados
+     * 
+     * @return string[] Array de paths das entidades para configuração do Doctrine
+     */
+    public function collectAllEntityPaths(): array;
 }

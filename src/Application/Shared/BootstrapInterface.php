@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Application\Shared;
 
 use App\Application\Shared\Http\Routing\RouteProviderInterface;
+use App\Application\Shared\EntityPaths\EntityPathProviderInterface;
 use DI\ContainerBuilder;
 
 interface BootstrapInterface
@@ -46,4 +47,18 @@ interface BootstrapInterface
      * Retorna o provedor de rotas (apenas se hasRoutes() for true)
      */
     public function getRouteProvider(): ?RouteProviderInterface;
+
+    /**
+     * Verifica se o módulo possui provedor de entity paths
+     * 
+     * ISP: Interface Segregation - apenas módulos com entidades implementam
+     */
+    public function hasEntityPathProvider(): bool;
+
+    /**
+     * Retorna o provedor de entity paths (apenas se hasEntityPathProvider() for true)
+     * 
+     * ISP: Retorna null se não houver provider (não força implementação)
+     */
+    public function getEntityPathProvider(): ?EntityPathProviderInterface;
 }

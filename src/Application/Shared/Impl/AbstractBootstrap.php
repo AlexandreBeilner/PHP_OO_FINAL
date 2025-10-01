@@ -6,6 +6,7 @@ namespace App\Application\Shared\Impl;
 
 use App\Application\Shared\BootstrapInterface;
 use App\Application\Shared\Http\Routing\RouteProviderInterface;
+use App\Application\Shared\EntityPaths\EntityPathProviderInterface;
 use DI\ContainerBuilder;
 
 abstract class AbstractBootstrap implements BootstrapInterface
@@ -61,6 +62,27 @@ abstract class AbstractBootstrap implements BootstrapInterface
      * Implementação padrão - módulos sem rotas retornam null
      */
     public function getRouteProvider(): ?RouteProviderInterface
+    {
+        return null;
+    }
+
+    /**
+     * Implementação padrão - módulos sem entity path provider retornam false
+     *
+     * Template Method: Subclasses podem sobrescrever se necessário
+     */
+    public function hasEntityPathProvider(): bool
+    {
+        return false;
+    }
+
+    /**
+     * Implementação padrão - módulos sem entity path provider retornam null
+     *
+     * ISP: Interface Segregation - implementação padrão segura
+     * Template Method: Subclasses sobrescrevem se possuem entidades
+     */
+    public function getEntityPathProvider(): ?EntityPathProviderInterface
     {
         return null;
     }

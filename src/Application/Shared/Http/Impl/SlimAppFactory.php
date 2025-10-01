@@ -12,6 +12,12 @@ use App\Application\Shared\Http\Middleware\Impl\NotFoundHandlerMiddleware;
 use App\Application\Shared\Http\Middleware\Impl\Utf8EncodingMiddleware;
 use App\Application\Shared\Http\SlimAppFactoryInterface;
 use App\Application\Shared\Orchestrator\BootstrapOrchestratorInterface;
+use App\Application\Shared\Orchestrator\LoaderBundle;
+use App\Application\Shared\Orchestrator\Impl\BootstrapOrchestrator;
+use App\Application\Shared\Registry\Impl\BootstrapRegistry;
+use App\Application\Shared\Loader\Impl\BootstrapLoader;
+use App\Application\Shared\Loader\Impl\RouteLoader;
+use App\Application\Shared\EntityPaths\Impl\EntityPathCollector;
 use DI\Bridge\Slim\Bridge;
 use DI\Container;
 use Slim\App;
@@ -47,11 +53,16 @@ final class SlimAppFactory implements SlimAppFactoryInterface
      */
     private function loadModularRoutes(App $app): void
     {
-        // Cria BootstrapOrchestrator para carregar rotas
-        $orchestrator = new \App\Application\Shared\Orchestrator\Impl\BootstrapOrchestrator(
-            new \App\Application\Shared\Registry\Impl\BootstrapRegistry(),
-            new \App\Application\Shared\Loader\Impl\BootstrapLoader(),
-            new \App\Application\Shared\Loader\Impl\RouteLoader()
+        // Cria BootstrapOrchestrator com LoaderBundle (nova assinatura)
+        $loaderBundle = new LoaderBundle(
+            new BootstrapLoader(),
+            new RouteLoader(),
+            new EntityPathCollector()
+        );
+        
+        $orchestrator = new BootstrapOrchestrator(
+            new BootstrapRegistry(),
+            $loaderBundle
         );
         $orchestrator->initializeDefaultBootstraps();
         $orchestrator->loadAllRoutes($app);

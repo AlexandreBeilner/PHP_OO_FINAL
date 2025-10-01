@@ -8,7 +8,9 @@ use App\Application\Shared\BootstrapInterface;
 use App\Application\Shared\Impl\AbstractBootstrap;
 use App\Application\Shared\Http\Routing\RouteProviderInterface;
 use App\Application\Shared\Http\Routing\RouteProviderFactoryInterface;
+use App\Application\Shared\EntityPaths\EntityPathProviderInterface;
 use App\Application\Modules\Security\Http\Routing\SecurityRouteProvider;
+use App\Application\Modules\Security\EntityPaths\SecurityEntityPathProvider;
 use DI\ContainerBuilder;
 
 final class SecurityBootstrap extends AbstractBootstrap implements BootstrapInterface
@@ -91,5 +93,34 @@ final class SecurityBootstrap extends AbstractBootstrap implements BootstrapInte
         
         // Fallback para compatibilidade (viola DIP, mas mantém funcionalidade)
         return new SecurityRouteProvider();
+    }
+
+    /**
+     * Tell Don't Ask: Informa que Security possui entity path provider
+     * Object Calisthenics: Método simples, uma responsabilidade
+     */
+    public function hasEntityPathProvider(): bool
+    {
+        return true;
+    }
+
+    /**
+     * Factory Method: Cria SecurityEntityPathProvider
+     * Object Calisthenics: Lazy initialization para não exceder 2 variáveis de instância
+     * DI: Cria dependência via factory method
+     */
+    public function getEntityPathProvider(): ?EntityPathProviderInterface
+    {
+        return $this->createSecurityEntityPathProvider();
+    }
+
+    /**
+     * Factory Method Pattern: Cria provider específico do Security
+     * SRP: Responsabilidade única de criar SecurityEntityPathProvider
+     * Object Calisthenics: Método privado focado
+     */
+    private function createSecurityEntityPathProvider(): SecurityEntityPathProvider
+    {
+        return new SecurityEntityPathProvider();
     }
 }

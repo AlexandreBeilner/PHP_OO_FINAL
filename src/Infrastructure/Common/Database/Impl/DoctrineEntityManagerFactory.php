@@ -7,13 +7,18 @@ namespace App\Infrastructure\Common\Database\Impl;
 use App\Infrastructure\Common\Database\DoctrineEntityManagerFactoryInterface;
 use App\Infrastructure\Common\Database\DoctrineEntityManagerInterface;
 use App\Application\Shared\Utils\Impl\ProjectRootDiscovery;
+use App\Application\Shared\Orchestrator\BootstrapOrchestratorInterface;
 use PDO;
 
 final class DoctrineEntityManagerFactory implements DoctrineEntityManagerFactoryInterface
 {
-    public static function create(array $connectionConfig): DoctrineEntityManagerInterface
+    /**
+     * Factory Method: Cria EntityManager com configuração dinâmica
+     * DIP: Aceita orchestrator como dependência para coletar entity paths
+     */
+    public static function create(array $connectionConfig, ?BootstrapOrchestratorInterface $orchestrator = null): DoctrineEntityManagerInterface
     {
-        $doctrineConfig = self::buildDoctrineConfig($connectionConfig);
+        $doctrineConfig = self::buildDoctrineConfig($connectionConfig, $orchestrator);
         return new DoctrineEntityManager($doctrineConfig);
     }
 
@@ -34,7 +39,12 @@ final class DoctrineEntityManagerFactory implements DoctrineEntityManagerFactory
         ];
     }
 
-    private static function buildDoctrineConfig(array $connectionConfig): array
+    /**
+     * SRP: Constrói configuração do Doctrine
+     * DIP: Usa orchestrator injetado para coletar entity paths dinamicamente
+     * Object Calisthenics: Delegação para métodos privados
+     */
+    private static function buildDoctrineConfig(array $connectionConfig, ?BootstrapOrchestratorInterface $orchestrator = null): array
     {
         return [
             'doctrine' => [
@@ -48,11 +58,7 @@ final class DoctrineEntityManagerFactory implements DoctrineEntityManagerFactory
                     'auto_generate_proxy_classes' => true,
                     'proxy_dir' => __DIR__ . '/../../cache/proxies',
                     'proxy_namespace' => 'App\\Proxies',
-                    'entity_paths' => [
-                        ProjectRootDiscovery::getProjectRoot() . '/src/Domain/Security/Entities/Impl',
-                        ProjectRootDiscovery::getProjectRoot() . '/src/Domain/Auth/Entities/Impl',
-                        ProjectRootDiscovery::getProjectRoot() . '/src/Domain/System/Entities/Impl',
-                    ],
+                    'entity_paths' => self::resolveEntityPaths($orchestrator),
                     'mapping_types' => [
                         'enum' => 'string',
                     ],
@@ -61,5 +67,19 @@ final class DoctrineEntityManagerFactory implements DoctrineEntityManagerFactory
                 ],
             ],
         ];
+    }
+
+    /**
+     * SRP: Resolve entity paths dinamicamente APENAS dos bootstraps
+     * DIP: Depende completamente da abstração (orchestrator)
+     * Object Calisthenics: Não usar else, guard clauses
+     */
+    private static function resolveEntityPaths(?BootstrapOrchestratorInterface $orchestrator): array
+    {
+        if ($orchestrator === null) {
+            return [];
+        }
+        
+        return $orchestrator->collectAllEntityPaths();
     }
 }

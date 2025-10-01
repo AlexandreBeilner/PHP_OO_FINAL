@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace App\Domain\Security\Services\Impl;
 
-use App\Domain\Security\DTOs\Impl\CreateUserDTO;
+use App\Domain\Security\DTOs\Impl\CreateUserDataDTO;
 use App\Domain\Security\Commands\Impl\CreateUserCommand;
-use App\Domain\Security\DTOs\Impl\UpdateUserDTO;
+use App\Domain\Security\DTOs\Impl\UpdateUserDataDTO;
 use App\Domain\Security\Commands\Impl\UpdateUserCommand;
 use App\Application\Shared\DTOs\Impl\ValidationResult;
 use App\Domain\Common\Exceptions\Impl\ValidationException;
@@ -23,7 +23,7 @@ final class UserValidationService implements UserValidationServiceInterface
         $this->userDataValidator = $userDataValidator;
     }
 
-    public function validateCreateUserRequest(ServerRequestInterface $request): CreateUserDTO
+    public function validateCreateUserRequest(ServerRequestInterface $request): CreateUserDataDTO
     {
         $data = $request->getParsedBody();
         
@@ -32,7 +32,7 @@ final class UserValidationService implements UserValidationServiceInterface
             throw new ValidationException('Dados para criação de usuário inválidos', $validation->getErrors());
         }
 
-        return CreateUserDTO::fromArray($data);
+        return CreateUserDataDTO::fromArray($data);
     }
 
     // ✅ COMMAND PATTERN: Retorna Command ao invés de DTO
@@ -48,7 +48,7 @@ final class UserValidationService implements UserValidationServiceInterface
         return CreateUserCommand::fromArray($data);
     }
 
-    public function validateUpdateUserRequest(ServerRequestInterface $request): UpdateUserDTO
+    public function validateUpdateUserRequest(ServerRequestInterface $request): UpdateUserDataDTO
     {
         $data = $request->getParsedBody();
         
@@ -57,7 +57,7 @@ final class UserValidationService implements UserValidationServiceInterface
             throw new ValidationException('Dados para atualização de usuário inválidos', $validation->getErrors());
         }
 
-        return UpdateUserDTO::fromArray($data);
+        return UpdateUserDataDTO::fromArray($data);
     }
 
     // ✅ COMMAND PATTERN: Retorna UpdateUserCommand ao invés de DTO

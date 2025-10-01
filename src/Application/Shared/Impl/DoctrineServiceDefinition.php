@@ -8,15 +8,23 @@ use App\Application\Shared\ServiceDefinitionInterface;
 use App\Infrastructure\Common\Database\DoctrineEntityManagerInterface;
 use App\Infrastructure\Common\Database\Impl\DoctrineEntityManagerFactory;
 use App\Application\Shared\Utils\Impl\ProjectRootDiscovery;
+use App\Application\Shared\Orchestrator\BootstrapOrchestratorInterface;
 use DI\ContainerBuilder;
 use function DI\factory;
 
 final class DoctrineServiceDefinition implements ServiceDefinitionInterface
 {
+    /**
+     * Factory Method: Cria EntityManager com entity paths dinâmicos
+     * DI: Injeta BootstrapOrchestrator via container
+     * SRP: Responsabilidade única de criar EntityManager configurado
+     */
     public static function createEntityManager($container): DoctrineEntityManagerInterface
     {
         $config = $container->get('doctrine.config');
-        return DoctrineEntityManagerFactory::create($config);
+        $orchestrator = $container->get(BootstrapOrchestratorInterface::class);
+        
+        return DoctrineEntityManagerFactory::create($config, $orchestrator);
     }
 
     public static function loadDoctrineConfig(): array

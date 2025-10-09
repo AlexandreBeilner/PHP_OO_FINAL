@@ -1,0 +1,679 @@
+= Diagrama do Fluxo de Requisições
+:doctype: article
+:encoding: utf-8
+:lang: pt-BR
+:toc: left
+:toclevels: 3
+:numbered:
+:source-highlighter: coderay
+:icons: font
+
+== Visão Geral da Arquitetura
+
+Esta aplicação PHP utiliza uma arquitetura baseada em Clean Architecture, Domain-Driven Design (DDD) e princípios SOLID, implementada com o framework Slim e container de injeção de dependência PHP-DI.
+
+== Fluxo Completo de uma Requisição HTTP
+
+=== 1. Diagrama ASCII do Fluxo Principal
+
+[source,text]
+----
+┌─────────────────┐
+│   HTTP Request  │
+└─────────┬───────┘
+          │
+          ▼
+┌─────────────────┐
+│  public/        │ ◄── Ponto de entrada único
+│  index.php      │     (Front Controller Pattern)
+└─────────┬───────┘
+          │
+          ▼
+┌─────────────────┐
+│  ApiApplication │ ◄── Singleton Pattern
+│  (Singleton)    │     Inicialização do Container DI
+└─────────┬───────┘
+          │
+          ▼
+┌─────────────────┐
+│ SlimAppFactory  │ ◄── Factory Pattern
+│                 │     Configuração de Middlewares
+└─────────┬───────┘
+          │
+          ▼
+┌─────────────────┐
+│ BootstrapOrch.  │ ◄── Orchestrator Pattern
+│ + Registry      │     Carrega módulos e rotas
+└─────────┬───────┘
+          │
+          ▼
+┌─────────────────┐
+│   Middlewares   │ ◄── Chain of Responsibility
+│   Pipeline      │     (Ordem específica)
+└─────────┬───────┘
+          │
+          ▼
+┌─────────────────┐
+│ Route Matching  │ ◄── Strategy Pattern
+│ & Dispatching   │     (RouteProviders modulares)
+└─────────┬───────┘
+          │
+          ▼
+┌─────────────────┐
+│   Controller    │ ◄── Command Pattern
+│   (Actions)     │     Coordenação da requisição
+└─────────┬───────┘
+          │
+          ▼
+┌─────────────────┐
+│   Domain        │ ◄── DDD - Lógica de negócio
+│   Services      │     isolada da infraestrutura
+└─────────┬───────┘
+          │
+          ▼
+┌─────────────────┐
+│  Repositories   │ ◄── Repository Pattern
+│  (Data Access)  │     Abstração do banco
+└─────────┬───────┘
+          │
+          ▼
+┌─────────────────┐
+│  HTTP Response  │ ◄── JSON padronizado
+│  (ApiResponse)  │     UTF-8, CORS headers
+└─────────────────┘
+----
+
+=== 2. Detalhamento dos Componentes
+
+==== 2.1 Ponto de Entrada (public/index.php)
+
+[source,php]
+----
+// Front Controller Pattern
+$app = ApiApplication::getInstance()->createSlimApp();
+
+// PSR-7 Request Factory
+$psr17Factory = new Psr17Factory();
+$creator = new ServerRequestCreator($psr17Factory, ...);
+$request = $creator->fromGlobals();
+
+// Execução
+$app->run($request);
+----
+
+**Responsabilidades:**
+- Único ponto de entrada para todas as requisições
+- Criação de objetos PSR-7 (Request/Response)
+- Inicialização da aplicação
+
+==== 2.2 ApiApplication (Singleton)
+
+[source,php]
+----
+final class ApiApplication implements ApplicationInterface
+{
+    private static ?ApiApplication $instance = null;
+    private Container $container;
+
+    public static function getInstance(): ApplicationInterface
+    {
+        if (self::$instance === null) {
+            self::$instance = new self();
+        }
+        return self::$instance;
+    }
+
+    private function initializeContainer(): void
+    {
+        // Container DI configuration
+        $orchestrator = new BootstrapOrchestrator(...);
+        $orchestrator->initializeDefaultBootstraps();
+        $orchestrator->loadAllServices($builder);
+    }
+}
+----
+
+**Responsabilidades:**
+- Gerenciamento do container de injeção de dependência
+- Inicialização dos bootstraps dos módulos
+- Configuração global da aplicação
+
+==== 2.3 SlimAppFactory (Factory Pattern)
+
+[source,php]
+----
+final class SlimAppFactory implements SlimAppFactoryInterface
+{
+    private function configureApp(App $app): void
+    {
+        // Middleware Pipeline (ordem importa!)
+        $app->addBodyParsingMiddleware();           // 1º
+        $app->add(new ContentTypeValidationMiddleware());   // 2º
+        $app->add(/* CORS Middleware */);                   // 3º
+        $app->add(new JsonResponseMiddleware());            // 4º
+        $app->add(new Utf8EncodingMiddleware());           // 5º
+        $app->add(new NotFoundHandlerMiddleware());        // 6º
+        
+        // Error Handler
+        $errorMiddleware = $app->addErrorMiddleware(true, true, true);
+        $errorHandler = new JsonErrorHandler(true, true, true);
+        
+        // Carregamento de rotas modulares
+        $this->loadModularRoutes($app);
+    }
+}
+----
+
+**Responsabilidades:**
+- Configuração dos middlewares em ordem específica
+- Configuração do tratamento de erros
+- Carregamento das rotas modulares
+
+=== 3. Pipeline de Middlewares
+
+==== 3.1 Ordem de Execução dos Middlewares
+
+[source,text]
+----
+Request ──► BodyParsing ──► ContentType ──► CORS ──► JsonResponse ──► UTF8 ──► NotFound ──► Controller
+                                                                                                  │
+Response ◄── BodyParsing ◄── ContentType ◄── CORS ◄── JsonResponse ◄── UTF8 ◄── NotFound ◄─────┘
+----
+
+==== 3.2 Detalhes dos Middlewares
+
+[cols="3,7"]
+|===
+|Middleware |Responsabilidade
+
+|*BodyParsingMiddleware* 
+|Parsing automático de JSON/XML no body da requisição
+
+|*ContentTypeValidationMiddleware* 
+|Valida Content-Type para operações POST/PUT/PATCH
+
+|*CORS Middleware* 
+|Adiciona headers CORS para permitir requisições cross-origin
+
+|*JsonResponseMiddleware* 
+|Força todas as respostas para format JSON padronizado
+
+|*Utf8EncodingMiddleware* 
+|Garante encoding UTF-8 em todas as respostas
+
+|*NotFoundHandlerMiddleware* 
+|Padroniza respostas 404 com lista de endpoints disponíveis
+
+|*JsonErrorHandler* 
+|Converte todas as exceções em respostas JSON padronizadas
+|===
+
+=== 4. Sistema de Roteamento Modular
+
+==== 4.1 Arquitetura de Módulos
+
+[source,text]
+----
+src/Application/Modules/
+├── Auth/                    ◄── Módulo de Autenticação
+│   ├── Http/Routing/
+│   └── Controllers/
+├── Security/                ◄── Módulo de Usuários
+│   ├── Http/Routing/
+│   └── Controllers/
+├── System/                  ◄── Módulo do Sistema
+│   ├── Http/Routing/
+│   └── Controllers/
+└── Shared/                  ◄── Recursos compartilhados
+    ├── Http/Routing/CoreRouteProvider
+    └── Controllers/
+----
+
+==== 4.2 RouteProviders por Módulo
+
+[cols="3,4,3"]
+|===
+|Módulo |RouteProvider |Endpoints Principais
+
+|*Core* 
+|CoreRouteProvider 
+|`/`, `/health`, `/app-status`
+
+|*System* 
+|SystemRouteProvider 
+|`/api/system/*`
+
+|*Auth* 
+|AuthRouteProvider 
+|`/api/auth/*`
+
+|*Security* 
+|SecurityRouteProvider 
+|`/api/security/users/*`
+|===
+
+=== 5. Camada de Controllers
+
+==== 5.1 Hierarquia de Controllers
+
+[source,text]
+----
+BaseControllerInterface
+└── AbstractBaseController (implements BaseControllerInterface)
+    ├── SystemController
+    ├── UserController  
+    └── SimpleAuthController
+----
+
+==== 5.2 Estrutura Típica de um Controller
+
+[source,php]
+----
+final class SystemController extends AbstractBaseController 
+    implements SystemControllerInterface
+{
+    private SystemServiceInterface $systemService;
+    private SystemResponseServiceInterface $systemResponseService;
+
+    public function getSystemInfo(
+        ServerRequestInterface $request, 
+        ResponseInterface $response
+    ): ResponseInterface {
+        try {
+            // 1. Chamar serviço de domínio
+            $systemInfo = $this->systemService->getSystemInfo();
+            
+            // 2. Transformar dados para resposta HTTP
+            $data = $this->systemResponseService
+                ->buildSystemInfoResponse($systemInfo);
+            
+            // 3. Criar resposta padronizada
+            $apiResponse = $this->success($data, 'Sucesso');
+            
+            // 4. Retornar response HTTP
+            $response->getBody()->write($apiResponse->toJson());
+            return $response->withHeader('Content-Type', 'application/json')
+                            ->withStatus($apiResponse->getCode());
+        } catch (Exception $e) {
+            // Tratamento padronizado de erros
+            $apiResponse = $this->error($e->getMessage(), 500);
+            $response->getBody()->write($apiResponse->toJson());
+            return $response->withStatus(500);
+        }
+    }
+}
+----
+
+=== 6. Camada de Domínio (DDD)
+
+==== 6.1 Estrutura do Domínio
+
+[source,text]
+----
+src/Domain/
+├── Auth/                    ◄── Contexto de Autenticação
+│   ├── Commands/           ◄── Command Objects
+│   ├── DTOs/              ◄── Data Transfer Objects
+│   └── Services/          ◄── Serviços de domínio
+├── Security/               ◄── Contexto de Segurança/Usuários
+│   ├── Entities/          ◄── Entidades de domínio
+│   ├── Repositories/      ◄── Interfaces dos repositórios
+│   ├── Services/          ◄── Lógica de negócio
+│   └── Validators/        ◄── Validadores de domínio
+├── System/                 ◄── Contexto do Sistema
+│   └── Services/          ◄── Serviços de sistema
+└── Common/                 ◄── Recursos compartilhados
+    ├── Entities/          ◄── Behaviors e traits
+    ├── Exceptions/        ◄── Exceções de domínio
+    ├── Services/          ◄── Serviços base
+    └── ValueObjects/      ◄── Objetos de valor
+----
+
+==== 6.2 Padrões Utilizados na Camada de Domínio
+
+[cols="3,7"]
+|===
+|Padrão |Implementação
+
+|*Repository Pattern* 
+|Abstração do acesso a dados com interfaces no domínio e implementação na infraestrutura
+
+|*Service Layer* 
+|Lógica de negócio concentrada em serviços de domínio
+
+|*Value Objects* 
+|Encapsulamento de tipos primitivos (Email, ModuleName, Priority)
+
+|*Domain Entities* 
+|Objetos com identidade própria e comportamentos de negócio
+
+|*Command Objects* 
+|Encapsulamento de operações complexas (CreateUserCommand)
+
+|*Specification Pattern* 
+|Validadores específicos de regras de negócio
+|===
+
+=== 7. Camada de Infraestrutura
+
+==== 7.1 Estrutura da Infraestrutura
+
+[source,text]
+----
+src/Infrastructure/
+└── Common/
+    └── Database/
+        ├── DoctrineEntityManagerFactory   ◄── Factory do EntityManager
+        ├── DoctrineEntityManager          ◄── Wrapper do Doctrine
+        └── Migrations/                    ◄── Migrações do banco
+----
+
+==== 7.2 Integração com Doctrine ORM
+
+[source,php]
+----
+// Configuração no Container DI
+$builder->addDefinitions([
+    EntityManagerInterface::class => function (Container $container) {
+        $factory = $container->get(DoctrineEntityManagerFactoryInterface::class);
+        return $factory->create();
+    }
+]);
+
+// Uso nos Repositórios
+final class UserRepository implements UserRepositoryInterface 
+{
+    private EntityManagerInterface $entityManager;
+
+    public function findById(int $id): ?UserEntityInterface 
+    {
+        return $this->entityManager->find(UserEntity::class, $id);
+    }
+}
+----
+
+=== 8. Sistema de Bootstrap e Injeção de Dependência
+
+==== 8.1 Hierarquia de Bootstrap
+
+[source,text]
+----
+BootstrapInterface
+└── AbstractBootstrap
+    ├── CommonBootstrap          ◄── Serviços base (DB, Common)
+    ├── SecurityBootstrap        ◄── Módulo Security
+    ├── SystemBootstrap          ◄── Módulo System  
+    └── AuthBootstrap           ◄── Módulo Auth
+----
+
+==== 8.2 Orchestrator Pattern
+
+[source,php]
+----
+final class BootstrapOrchestrator implements BootstrapOrchestratorInterface
+{
+    public function initializeDefaultBootstraps(): void
+    {
+        // Registro dos bootstraps com prioridades
+        $this->registry->register(new CommonBootstrap());     // Priority: 10
+        $this->registry->register(new SecurityBootstrap());   // Priority: 20
+        $this->registry->register(new SystemBootstrap());     // Priority: 30
+        $this->registry->register(new AuthBootstrap());       // Priority: 40
+    }
+
+    public function loadAllServices(ContainerBuilder $builder): void
+    {
+        // Carregamento ordenado por prioridade
+        $bootstraps = $this->registry->getAllOrderedByPriority();
+        foreach ($bootstraps as $bootstrap) {
+            $this->loader->loadServices($bootstrap, $builder);
+        }
+    }
+}
+----
+
+=== 9. Padronização de Respostas
+
+==== 9.1 ApiResponse Padronizada
+
+[source,php]
+----
+final class ApiResponse implements ApiResponseInterface
+{
+    private bool $success;
+    private mixed $data;
+    private string $message;
+    private int $code;
+    private string $timestamp;
+
+    public function toJson(): string
+    {
+        return json_encode([
+            'success' => $this->success,
+            'data' => $this->data,
+            'message' => $this->message,
+            'code' => $this->code,
+            'timestamp' => $this->timestamp,
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+}
+----
+
+==== 9.2 Exemplos de Respostas
+
+===== Resposta de Sucesso
+[source,json]
+----
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "name": "João Silva",
+    "email": "joao@exemplo.com"
+  },
+  "message": "Usuário encontrado com sucesso",
+  "code": 200,
+  "timestamp": "2025-09-24 15:30:45"
+}
+----
+
+===== Resposta de Erro
+[source,json]
+----
+{
+  "success": false,
+  "data": null,
+  "message": "Usuário não encontrado",
+  "code": 404,
+  "timestamp": "2025-09-24 15:30:45"
+}
+----
+
+===== Resposta de Validação
+[source,json]
+----
+{
+  "success": false,
+  "data": {
+    "errors": {
+      "email": ["O campo email é obrigatório"],
+      "password": ["A senha deve ter pelo menos 8 caracteres"]
+    }
+  },
+  "message": "Dados inválidos",
+  "code": 400,
+  "timestamp": "2025-09-24 15:30:45"
+}
+----
+
+=== 10. Princípios Arquiteturais Aplicados
+
+==== 10.1 SOLID Principles
+
+[cols="2,8"]
+|===
+|Princípio |Implementação
+
+|*S - Single Responsibility* 
+|Cada classe tem uma única responsabilidade (Controllers só coordenam, Services só contêm lógica de negócio)
+
+|*O - Open/Closed* 
+|Extensível via novos módulos/bootstraps sem modificar código existente
+
+|*L - Liskov Substitution* 
+|Interfaces bem definidas permitem substituição transparente de implementações
+
+|*I - Interface Segregation* 
+|Múltiplas interfaces específicas (UserServiceInterface, SystemServiceInterface)
+
+|*D - Dependency Inversion* 
+|Controllers dependem de abstrações (interfaces), não de implementações concretas
+|===
+
+==== 10.2 Clean Architecture Layers
+
+[cols="3,7"]
+|===
+|Camada |Responsabilidade
+
+|*Framework & Drivers* 
+|Slim, Doctrine, PSR-7 (pasta public/, Infrastructure/)
+
+|*Interface Adapters* 
+|Controllers, Middlewares, DTOs (pasta Application/)
+
+|*Use Cases* 
+|Services de domínio, Commands (pasta Domain/*/Services)
+
+|*Entities* 
+|Regras de negócio fundamentais (pasta Domain/*/Entities)
+|===
+
+=== 11. Exemplo Completo: Fluxo de Criação de Usuário
+
+==== 11.1 Sequência Completa
+
+[source,text]
+----
+POST /api/security/users
+Content-Type: application/json
+
+{
+  "name": "João Silva",
+  "email": "joao@exemplo.com",
+  "password": "senha123"
+}
+
+   ┌─────────────────────────────────────────────────────────────┐
+   │                    FLUXO COMPLETO                           │
+   └─────────────────────────────────────────────────────────────┘
+
+1. index.php
+   ├── Recebe requisição HTTP
+   ├── Cria PSR-7 Request
+   └── Chama ApiApplication::getInstance()->createSlimApp()->run()
+
+2. ApiApplication
+   ├── Singleton instance
+   ├── Inicializa Container DI
+   └── Chama SlimAppFactory->create()
+
+3. SlimAppFactory  
+   ├── Configura middlewares
+   ├── Carrega rotas modulares via BootstrapOrchestrator
+   └── Retorna App configurada
+
+4. Middleware Pipeline
+   ├── BodyParsingMiddleware: Parser JSON → $request->getParsedBody()
+   ├── ContentTypeValidationMiddleware: Valida "application/json"
+   ├── CORS: Adiciona headers CORS
+   ├── JsonResponseMiddleware: Força JSON response
+   ├── Utf8EncodingMiddleware: Força UTF-8
+   └── NotFoundHandlerMiddleware: Se rota não existe → 404
+
+5. Route Matching
+   ├── POST /api/security/users encontrada
+   ├── SecurityRouteProvider mapeou para UserController::create
+   └── Container DI resolve UserController
+
+6. UserController::create()
+   ├── Extrai dados: $data = $request->getParsedBody()
+   ├── Chama UserService->createUser($data)
+   └── Trata resposta/exceções
+
+7. UserService->createUser()
+   ├── Valida dados: UserDataValidator->validate($data)
+   ├── Cria Command: new CreateUserCommand($data)
+   ├── Executa Command: CommandExecutor->execute($command)
+   └── Retorna UserEntity criada
+
+8. CommandExecutor->execute(CreateUserCommand)
+   ├── Valida regras de negócio (email único, etc.)
+   ├── Cria UserEntity
+   ├── Chama UserRepository->save($user)
+   └── Retorna UserEntity persistida
+
+9. UserRepository->save()
+   ├── EntityManager->persist($user)
+   ├── EntityManager->flush()
+   └── Retorna UserEntity com ID
+
+10. Response Pipeline
+    ├── Controller cria ApiResponse com dados do usuário
+    ├── JsonResponseMiddleware força Content-Type: application/json
+    ├── Utf8EncodingMiddleware força charset=utf-8
+    └── HTTP Response retornado ao cliente
+
+RESULTADO:
+HTTP/1.1 201 Created
+Content-Type: application/json; charset=utf-8
+{
+  "success": true,
+  "data": {
+    "id": 123,
+    "name": "João Silva", 
+    "email": "joao@exemplo.com",
+    "active": true,
+    "created_at": "2025-09-24 15:30:45"
+  },
+  "message": "Usuário criado com sucesso",
+  "code": 201,
+  "timestamp": "2025-09-24 15:30:45"
+}
+----
+
+== Considerações Finais
+
+=== Vantagens da Arquitetura
+
+1. **Modularidade**: Cada módulo é independente e pode ser desenvolvido/testado isoladamente
+2. **Testabilidade**: Injeção de dependência facilita mocks e testes unitários
+3. **Manutenibilidade**: Separação clara de responsabilidades
+4. **Extensibilidade**: Novos módulos podem ser adicionados sem modificar código existente
+5. **Padronização**: Todas as respostas seguem o mesmo formato JSON
+
+=== Padrões de Design Utilizados
+
+- **Singleton**: ApiApplication
+- **Factory**: SlimAppFactory, RouteProviderFactory
+- **Strategy**: RouteProviders modulares
+- **Repository**: Abstração do acesso a dados
+- **Command**: Encapsulamento de operações
+- **Orchestrator**: BootstrapOrchestrator
+- **Registry**: BootstrapRegistry
+- **Chain of Responsibility**: Middleware Pipeline
+- **Dependency Injection**: Container PHP-DI
+- **Front Controller**: index.php como ponto único de entrada
+
+=== Compatibilidade
+
+- **PHP**: 7.4+
+- **Framework**: Slim 4
+- **ORM**: Doctrine 2
+- **Container DI**: PHP-DI 6
+- **PSR**: PSR-7 (HTTP Messages), PSR-11 (Container), PSR-15 (Middleware)
+- **Docker**: Ambiente completamente dockerizado
+
+---
+
+*Documento gerado automaticamente a partir da análise da estrutura do projeto em 24/09/2025*

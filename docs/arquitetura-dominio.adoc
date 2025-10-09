@@ -1,0 +1,1003 @@
+= Arquitetura da Camada de Domínio
+:doctype: article
+:encoding: utf-8
+:lang: pt-BR
+:toc: left
+:toclevels: 3
+:numbered:
+:source-highlighter: coderay
+:icons: font
+
+== Visão Geral da Camada de Domínio
+
+A camada de domínio (`src/Domain`) implementa os conceitos centrais do **Domain-Driven Design (DDD)**, concentrando toda a lógica de negócio e regras fundamentais da aplicação. Esta camada é **completamente independente** de frameworks e tecnologias de infraestrutura.
+
+=== Princípios Arquiteturais
+
+[cols="3,7"]
+|===
+|Princípio |Implementação
+
+|*Clean Architecture* 
+|Domínio no centro, sem dependências externas
+
+|*Domain-Driven Design* 
+|Modelagem baseada no domínio de negócio
+
+|*SOLID Principles* 
+|Interfaces bem definidas, responsabilidades únicas
+
+|*Tell Don't Ask* 
+|Entidades com comportamentos, não apenas dados
+
+|*Object Calisthenics* 
+|Classes pequenas, sem getters/setters desnecessários
+|===
+
+== Estrutura Detalhada dos Contextos
+
+=== 1. Diagrama da Arquitetura de Domínio
+
+[source,text]
+----
+src/Domain/
+├── Auth/                        ◄── CONTEXTO: Autenticação
+│   ├── Commands/               
+│   │   └── Impl/
+│   │       ├── LoginCommand.php         ◄── Command Pattern
+│   │       └── ChangePasswordCommand.php
+│   └── DTOs/
+│       └── Impl/
+│           ├── LoginDataDTO.php         ◄── Data Transfer Objects
+│           └── ChangePasswordDataDTO.php
+│
+├── Security/                    ◄── CONTEXTO: Segurança/Usuários
+│   ├── Entities/               
+│   │   ├── UserEntityInterface.php      ◄── Interface da Entidade
+│   │   └── Impl/
+│   │       └── UserEntity.php           ◄── Entidade Rica em Comportamentos
+│   ├── Repositories/
+│   │   ├── UserRepositoryInterface.php  ◄── Repository Pattern
+│   │   └── Impl/
+│   │       └── UserRepository.php       ◄── Implementação Doctrine
+│   ├── Services/
+│   │   ├── UserServiceInterface.php     ◄── Serviços de Domínio
+│   │   ├── AuthServiceInterface.php
+│   │   └── Impl/
+│   │       ├── UserService.php          ◄── Lógica de Negócio
+│   │       ├── AuthService.php
+│   │       ├── UserValidationService.php
+│   │       └── AuthValidationService.php
+│   ├── Commands/
+│   │   └── Impl/
+│   │       ├── CreateUserCommand.php    ◄── Command Objects
+│   │       └── UpdateUserCommand.php
+│   ├── DTOs/
+│   │   └── Impl/
+│   │       ├── AbstractBaseUserDataDTO.php ◄── DTO Base
+│   │       ├── CreateUserDataDTO.php
+│   │       ├── UpdateUserDataDTO.php
+│   │       └── BaseUserDataDTO.php
+│   └── Validators/
+│       ├── UserDataValidatorInterface.php
+│       ├── AuthDataValidatorInterface.php
+│       └── Impl/
+│           ├── UserDataValidator.php    ◄── Validação de Domínio
+│           └── AuthDataValidator.php
+│
+├── System/                      ◄── CONTEXTO: Sistema
+│   └── Services/
+│       ├── SystemServiceInterface.php
+│       ├── SystemResponseServiceInterface.php
+│       └── Impl/
+│           ├── SystemService.php        ◄── Serviços de Sistema
+│           └── SystemResponseService.php
+│
+└── Common/                      ◄── CONTEXTO: Recursos Compartilhados
+    ├── Entities/
+    │   └── Behaviors/                   ◄── Behavior Pattern
+    │       ├── TimestampableBehaviorInterface.php
+    │       ├── SoftDeletableBehaviorInterface.php
+    │       ├── UuidableBehaviorInterface.php
+    │       └── Impl/
+    │           ├── TimestampableBehavior.php    ◄── Comportamentos Reutilizáveis
+    │           ├── SoftDeletableBehavior.php
+    │           └── UuidableBehavior.php
+    ├── Exceptions/
+    │   ├── BaseExceptionInterface.php
+    │   ├── BusinessLogicExceptionInterface.php
+    │   ├── ValidationExceptionInterface.php
+    │   └── Impl/
+    │       ├── AbstractBaseException.php        ◄── Hierarquia de Exceções
+    │       ├── BusinessLogicExceptionAbstract.php
+    │       └── ValidationException.php
+    ├── Repositories/
+    │   ├── AbstractRepositoryInterface.php
+    │   └── Impl/
+    │       └── AbstractRepository.php           ◄── Repository Base
+    ├── Services/
+    │   ├── AbstractServiceInterface.php
+    │   └── Impl/
+    │       └── AbstractService.php              ◄── Service Base
+    ├── Validators/
+    │   ├── ValidatorInterface.php
+    │   ├── EmailValidatorInterface.php
+    │   └── Impl/
+    │       └── EmailValidator.php               ◄── Validadores Específicos
+    └── ValueObjects/                            ◄── Value Objects (DDD)
+        ├── ModuleName/
+        ├── Priority/
+        └── RoutePrefix/
+----
+
+=== 2. Contexto Security (Usuários)
+
+==== 2.1 Entidade UserEntity - Rica em Comportamentos
+
+[source,php]
+----
+final class UserEntity implements UserEntityInterface, JsonSerializable
+{
+    // ✅ Propriedades públicas (Object Calisthenics - evitar getters)
+    public int $id;
+    public string $name;
+    public string $email;
+    public string $password;
+    public string $role;
+    public string $status;
+    public DateTime $createdAt;
+    public DateTime $updatedAt;
+    public ?string $uuid;
+
+    // ✅ Behaviors compostos (SRP)
+    private TimestampableBehaviorInterface $timestampableBehavior;
+    private UuidableBehaviorInterface $uuidableBehavior;
+
+    // ✅ MÉTODOS COMPORTAMENTAIS (Tell, Don't Ask)
+    
+    public function authenticate(string $password): bool
+    {
+        if (!$this->isActive()) {
+            return false;
+        }
+        return $this->verifyPassword($password);
+    }
+
+    public function activate(): self
+    {
+        $this->status = 'active';
+        $this->touchEntity();
+        return $this;
+    }
+
+    public function deactivate(): self
+    {
+        $this->status = 'inactive';
+        $this->touchEntity();
+        return $this;
+    }
+
+    public function updatePassword(string $newPassword): self
+    {
+        $this->password = password_hash($newPassword, PASSWORD_DEFAULT);
+        $this->touchEntity();
+        return $this;
+    }
+
+    public function updateProfile(array $profileData): self
+    {
+        // Lógica de atualização de perfil
+        $this->touchEntity();
+        return $this;
+    }
+
+    // ✅ REGRAS DE NEGÓCIO NA ENTIDADE
+    
+    public function canPerform(string $action): bool
+    {
+        if (!$this->isActive()) {
+            return false;
+        }
+        
+        switch ($this->role) {
+            case 'admin': return true;
+            case 'user': return in_array($action, ['view', 'edit_own']);
+            default: return false;
+        }
+    }
+
+    public function needsPasswordChange(): bool
+    {
+        $ninetyDaysAgo = (new DateTime())->modify('-90 days');
+        return $this->updatedAt < $ninetyDaysAgo;
+    }
+
+    public function canBePromotedToAdmin(): bool
+    {
+        return $this->isActive() && !$this->isAdmin();
+    }
+}
+----
+
+**Características da Entidade:**
+
+- **Rica em Comportamentos**: Métodos que encapsulam regras de negócio
+- **Object Calisthenics**: Propriedades públicas, evita getters desnecessários
+- **Tell Don't Ask**: Cliente manda a entidade fazer algo, não pergunta estado
+- **Composition over Inheritance**: Usa behaviors como composição
+- **SRP**: Cada método tem uma responsabilidade específica
+
+==== 2.2 UserService - Coordenação de Casos de Uso
+
+[source,php]
+----
+final class UserService extends AbstractService implements UserServiceInterface
+{
+    private EmailValidatorInterface $emailValidator;
+
+    // ✅ CASOS DE USO PRINCIPAIS
+    
+    public function createUser(CreateUserDataDTO $data): UserEntityInterface
+    {
+        // 1. Validações de domínio
+        $this->validateEmail($data->email);
+        $this->validateEmailAvailabilityOrThrow($data->email);
+        $this->validatePassword($data->password);
+        $this->validateRole($data->role);
+
+        // 2. Criação da entidade
+        $user = new UserEntity(
+            $data->name,
+            $data->email,
+            $data->password,
+            $data->role,
+            'active'
+        );
+
+        // 3. Persistência
+        return $this->repository->save($user);
+    }
+
+    public function updateUser(int $id, UpdateUserDataDTO $data): UserEntityInterface
+    {
+        return $this->processUserById($id, function($user) use ($data) {
+            // Validações usando DTO readonly
+            if ($data->email !== null) {
+                $this->validateEmail($data->email);
+                if ($data->email !== $user->email) {
+                    $this->validateEmailAvailabilityOrThrow($data->email, $id);
+                }
+            }
+
+            // Profile updates (Tell, Don't Ask)
+            $profileData = $data->toArray();
+            $profileFields = ['name', 'email', 'role'];
+            $profileUpdate = array_intersect_key($profileData, 
+                                array_flip($profileFields));
+            if (!empty($profileUpdate)) {
+                $user->updateProfile($profileUpdate);
+            }
+
+            // Password update
+            if ($data->password !== null) {
+                $user->updatePassword($data->password);
+            }
+
+            return $this->repository->save($user);
+        });
+    }
+
+    // ✅ MÉTODOS COMPORTAMENTAIS DE ALTO NÍVEL
+    
+    public function promoteToAdmin(int $userId): ?UserEntityInterface
+    {
+        return $this->processUserById($userId, function($user) {
+            if ($user->isAdmin()) {
+                return $user;
+            }
+            
+            $user->updateProfile(['role' => 'admin']);
+            return $this->saveUser($user);
+        });
+    }
+
+    public function deactivateInactiveUsers(int $daysInactive = 90): array
+    {
+        return $this->processAllUsers(function($user) {
+            if ($user->isActive() && $user->needsPasswordChange()) {
+                $user->deactivate();
+                $this->saveUser($user);
+                return $user;
+            }
+            return null;
+        });
+    }
+}
+----
+
+**Características do Service:**
+
+- **Orquestração**: Coordena entidades, repositórios e validações
+- **Use Cases**: Cada método público representa um caso de uso
+- **Tell Don't Ask**: Diz às entidades o que fazer
+- **DTO Usage**: Usa DTOs para transfer data de forma type-safe
+- **Error Handling**: Tratamento centralizado de exceções de domínio
+
+==== 2.3 Commands - Encapsulamento de Operações
+
+[source,php]
+----
+final class CreateUserCommand
+{
+    private CreateUserDataDTO $data;
+    
+    public function __construct(CreateUserDataDTO $data)
+    {
+        $this->data = $data;
+    }
+
+    // ✅ EXECUÇÃO ENCAPSULADA (Command Pattern)
+    public function executeWith(UserServiceInterface $userService): UserEntityInterface
+    {
+        return $userService->createUser($this->data);
+    }
+
+    // ✅ FACTORY METHOD
+    public static function fromArray(array $data): self
+    {
+        return new self(CreateUserDataDTO::fromArray($data));
+    }
+}
+----
+
+**Vantagens dos Commands:**
+
+- **Command Pattern**: Encapsula operação como objeto
+- **Reusabilidade**: Pode ser usado em diferentes contextos
+- **Testabilidade**: Facilita testes unitários
+- **Queue Support**: Pode ser facilmente enfileirado
+
+==== 2.4 DTOs - Transfer Objects Type-Safe
+
+[source,php]
+----
+// ✅ DTO BASE ABSTRATO (DRY Principle)
+abstract class AbstractBaseUserDataDTO
+{
+    public ?string $name;
+    public ?string $email;
+    public ?string $password;
+    public ?string $role;
+
+    public function __construct(
+        ?string $name = null,
+        ?string $email = null,
+        ?string $password = null,
+        ?string $role = null
+    ) {
+        $this->name = $name;
+        $this->email = $email;
+        $this->password = $password;
+        $this->role = $role;
+    }
+}
+
+// ✅ DTO ESPECÍFICO PARA CRIAÇÃO
+final class CreateUserDataDTO extends AbstractBaseUserDataDTO
+{
+    // Garante que dados de criação são obrigatórios
+    public function __construct(
+        string $name,
+        string $email,
+        string $password,
+        string $role = 'user'
+    ) {
+        parent::__construct($name, $email, $password, $role);
+    }
+
+    public static function fromArray(array $data): self
+    {
+        return new self(
+            $data['name'] ?? '',
+            $data['email'] ?? '',
+            $data['password'] ?? '',
+            $data['role'] ?? 'user'
+        );
+    }
+}
+----
+
+=== 3. Contexto Auth (Autenticação)
+
+==== 3.1 AuthService - Casos de Uso de Autenticação
+
+[source,php]
+----
+final class AuthService implements AuthServiceInterface
+{
+    private UserServiceInterface $userService;
+
+    // ✅ AUTENTICAÇÃO COM DTO
+    public function authenticate(LoginDataDTO $credentials): ?UserEntityInterface
+    {
+        $user = $this->userService->getUserByEmail($credentials->email);
+        if (!$user) {
+            return null;
+        }
+
+        // Usa comportamento da entidade (Tell, Don't Ask)
+        if ($user->authenticate($credentials->password)) {
+            return $user;
+        }
+
+        return null;
+    }
+
+    // ✅ MUDANÇA DE SENHA COM DTO
+    public function changePassword(ChangePasswordDataDTO $data): ?UserEntityInterface
+    {
+        $user = $this->userService->processUserById($data->userId, fn($user) => $user);
+        if (!$user) {
+            return null;
+        }
+
+        // Valida senha atual
+        if (!$user->authenticate($data->currentPassword)) {
+            return null;
+        }
+        
+        // Atualiza senha (Tell, Don't Ask)
+        $user->updatePassword($data->newPassword);
+        
+        return $this->userService->saveUser($user);
+    }
+
+    // ✅ MÉTODOS COMPORTAMENTAIS
+    public function authenticateWithPermissions(
+        string $email, 
+        string $password, 
+        string $requiredAction
+    ): array {
+        $user = $this->userService->getUserByEmail($email);
+        if (!$user || !$user->authenticate($password)) {
+            return [
+                'success' => false,
+                'message' => 'Credenciais inválidas',
+                'canPerform' => false
+            ];
+        }
+        
+        return [
+            'success' => true,
+            'user' => $user,
+            'canPerform' => $user->canPerform($requiredAction),
+            'needsPasswordChange' => $user->needsPasswordChange()
+        ];
+    }
+}
+----
+
+=== 4. Contexto Common - Infraestrutura Compartilhada
+
+==== 4.1 Behaviors - Composição de Comportamentos
+
+[source,php]
+----
+// ✅ BEHAVIOR INTERFACE
+interface TimestampableBehaviorInterface
+{
+    public function getCreatedAtFormatted(string $format = 'Y-m-d H:i:s'): string;
+    public function getUpdatedAtFormatted(string $format = 'Y-m-d H:i:s'): string;
+    public function wasCreatedRecently(): bool;
+    public function wasUpdatedRecently(): bool;
+    public function getAgeInDays(): int;
+    public function touch(): self;
+}
+
+// ✅ BEHAVIOR IMPLEMENTATION
+final class TimestampableBehavior implements TimestampableBehaviorInterface
+{
+    private DateTime $createdAt;
+    private DateTime $updatedAt;
+
+    public function wasCreatedRecently(): bool
+    {
+        $oneDayAgo = (new DateTime())->modify('-1 day');
+        return $this->createdAt > $oneDayAgo;
+    }
+
+    public function getAgeInDays(): int
+    {
+        $now = new DateTime();
+        return (int) $this->createdAt->diff($now)->days;
+    }
+
+    public function touch(): self
+    {
+        $this->updatedAt = new DateTime();
+        return $this;
+    }
+}
+----
+
+**Vantagens dos Behaviors:**
+
+- **Composition over Inheritance**: Evita hierarquias complexas
+- **SRP**: Cada behavior tem uma responsabilidade específica
+- **Reusabilidade**: Pode ser usado em múltiplas entidades
+- **Testabilidade**: Fácil de testar isoladamente
+
+==== 4.2 Exception Hierarchy - Tratamento de Erros
+
+[source,php]
+----
+// ✅ BASE EXCEPTION
+abstract class AbstractBaseException extends Exception implements BaseExceptionInterface
+{
+    protected array $context = [];
+
+    public function getContext(): array
+    {
+        return $this->context;
+    }
+
+    public function addContext(string $key, $value): self
+    {
+        $this->context[$key] = $value;
+        return $this;
+    }
+}
+
+// ✅ VALIDATION EXCEPTION
+final class ValidationException extends AbstractBaseException 
+    implements ValidationExceptionInterface
+{
+    private array $errors = [];
+
+    public function __construct(string $message = "Validation failed", 
+                                array $errors = [], int $code = 422)
+    {
+        parent::__construct($message, $code);
+        $this->errors = $errors;
+    }
+
+    public function addError(string $field, string $message): self
+    {
+        $this->errors[$field][] = $message;
+        return $this;
+    }
+
+    public function getErrors(): array
+    {
+        return $this->errors;
+    }
+}
+----
+
+==== 4.3 Repository Pattern - Abstração de Dados
+
+[source,php]
+----
+// ✅ REPOSITORY INTERFACE
+interface AbstractRepositoryInterface
+{
+    public function find(int $id): ?object;
+    public function findAll(): array;
+    public function findBy(array $criteria): array;
+    public function findOneBy(array $criteria): ?object;
+    public function save(object $entity): object;
+    public function delete(object $entity): bool;
+    public function count(array $criteria = []): int;
+}
+
+// ✅ ABSTRACT REPOSITORY
+abstract class AbstractRepository implements AbstractRepositoryInterface
+{
+    protected EntityManagerInterface $entityManager;
+
+    // ✅ MÉTODOS BÁSICOS CRUD
+    public function find(int $id): ?object
+    {
+        return $this->entityManager->find($this->getEntityClass(), $id);
+    }
+
+    public function save(object $entity): object
+    {
+        $this->entityManager->persist($entity);
+        $this->entityManager->flush();
+        return $entity;
+    }
+
+    // ✅ QUERY BUILDER SUPPORT
+    protected function createQueryBuilder(string $alias): QueryBuilder
+    {
+        return $this->entityManager
+                   ->createQueryBuilder()
+                   ->select($alias)
+                   ->from($this->getEntityClass(), $alias);
+    }
+
+    abstract protected function getEntityClass(): string;
+}
+
+// ✅ CONCRETE REPOSITORY
+final class UserRepository extends AbstractRepository 
+    implements UserRepositoryInterface
+{
+    public function findByEmail(string $email): ?UserEntityInterface
+    {
+        return $this->findOneBy(['email' => $email]);
+    }
+
+    public function searchByName(string $name): array
+    {
+        $qb = $this->createQueryBuilder('u');
+        $qb->where('u.name LIKE :name')
+           ->setParameter('name', '%' . $name . '%');
+        return $qb->getQuery()->getResult();
+    }
+
+    protected function getEntityClass(): string
+    {
+        return UserEntity::class;
+    }
+}
+----
+
+=== 5. Sistema de Validação de Domínio
+
+==== 5.1 Validators - Validação Específica
+
+[source,php]
+----
+// ✅ VALIDATOR INTERFACE
+interface ValidatorInterface
+{
+    public function validate($data): bool;
+    public function getErrorMessage(): string;
+}
+
+// ✅ EMAIL VALIDATOR
+final class EmailValidator implements EmailValidatorInterface
+{
+    private string $errorMessage = '';
+
+    public function validate($email): bool
+    {
+        if (!is_string($email)) {
+            $this->errorMessage = 'Email deve ser uma string';
+            return false;
+        }
+
+        if (empty($email)) {
+            $this->errorMessage = 'Email é obrigatório';
+            return false;
+        }
+
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $this->errorMessage = 'Formato de email inválido';
+            return false;
+        }
+
+        if (!$this->validateEmailDomain($email)) {
+            $this->errorMessage = 'Domínio de email não permitido';
+            return false;
+        }
+
+        return true;
+    }
+
+    private function validateEmailDomain(string $email): bool
+    {
+        $domain = substr(strrchr($email, '@'), 1);
+        $blockedDomains = ['tempmail.com', '10minutemail.com'];
+        return !in_array($domain, $blockedDomains);
+    }
+}
+----
+
+== Padrões e Práticas Implementados
+
+=== 1. Domain-Driven Design (DDD)
+
+[cols="3,7"]
+|===
+|Conceito DDD |Implementação
+
+|*Entities* 
+|UserEntity com identidade e comportamentos ricos
+
+|*Value Objects* 
+|ModuleName, Priority, RoutePrefix (imutáveis)
+
+|*Domain Services* 
+|UserService, AuthService (lógica que não pertence às entidades)
+
+|*Repositories* 
+|UserRepository (abstração do acesso a dados)
+
+|*Aggregates* 
+|User como aggregate root
+
+|*Domain Events* 
+|Preparado para eventos de domínio (futura expansão)
+
+|*Bounded Contexts* 
+|Auth, Security, System como contextos separados
+|===
+
+=== 2. Object Calisthenics
+
+[cols="3,7"]
+|===
+|Regra |Implementação
+
+|*One level of indentation* 
+|Métodos pequenos com guard clauses
+
+|*Don't use ELSE* 
+|Early returns e guard clauses
+
+|*Wrap primitives* 
+|DTOs encapsulam dados primitivos
+
+|*First class collections* 
+|Arrays encapsulados em métodos específicos
+
+|*One dot per line* 
+|Evita method chaining excessivo
+
+|*Don't abbreviate* 
+|Nomes completos e descritivos
+
+|*Keep entities small* 
+|Classes focadas, máximo 50 linhas
+
+|*No getters/setters* 
+|Propriedades públicas quando apropriado, métodos comportamentais
+|===
+
+=== 3. SOLID Principles
+
+==== Single Responsibility Principle (SRP)
+- Cada classe tem **uma única razão para mudar**
+- UserEntity: representa usuário e seus comportamentos
+- UserService: coordena casos de uso de usuários
+- AuthService: casos de uso de autenticação
+- Validators: validação específica
+
+==== Open/Closed Principle (OCP)
+- **Aberto para extensão**: Novos behaviors, validators, services
+- **Fechado para modificação**: Classes existentes não mudam
+
+==== Liskov Substitution Principle (LSP)
+- Interfaces bem definidas permitem substituição
+- UserEntityInterface pode ser implementada por diferentes entidades
+- AbstractRepository pode ser estendido sem quebrar contratos
+
+==== Interface Segregation Principle (ISP)
+- Interfaces específicas e pequenas
+- Clients não dependem de métodos que não usam
+- Separação entre UserServiceInterface, AuthServiceInterface
+
+==== Dependency Inversion Principle (DIP)
+- Services dependem de interfaces (abstrações)
+- Não dependem de implementações concretas
+- Repository pattern implementa DIP perfeitamente
+
+=== 4. Tell Don't Ask
+
+==== ❌ **Anti-Pattern (Ask)**
+[source,php]
+----
+// MAL: Cliente pergunta estado e decide o que fazer
+if ($user->getStatus() === 'active' && $user->getRole() === 'admin') {
+    $user->setCanPerform(true);
+}
+----
+
+==== ✅ **Pattern Correto (Tell)**
+[source,php]
+----
+// BOM: Cliente manda entidade fazer algo
+$canPerform = $user->canPerform('admin_action');
+
+// BOM: Cliente manda entidade mudar de estado
+$user->activate();
+$user->promoteToAdmin();
+----
+
+== Fluxo Completo: Caso de Uso "Criar Usuário"
+
+=== Sequência Detalhada
+
+[source,text]
+----
+1. 📋 CONTROLLER recebe dados HTTP
+   │
+   ├── Valida formato básico
+   ├── Cria CreateUserDataDTO
+   └── Chama UserService->createUser()
+   
+2. 🏭 COMMAND CREATION (Opcional)
+   │
+   ├── CreateUserCommand::fromArray($data)
+   ├── Encapsula operação como objeto
+   └── Command->executeWith(UserService)
+   
+3. 🎯 USER SERVICE (Domain Layer)
+   │
+   ├── validateEmail() usando EmailValidator
+   ├── validateEmailAvailabilityOrThrow() 
+   ├── validatePassword() (regras de negócio)
+   ├── validateRole() (roles válidas)
+   ├── new UserEntity() com dados do DTO
+   └── repository->save($user)
+   
+4. 🏛️ USER ENTITY (Rich Domain Model)
+   │
+   ├── __construct() initializes:
+   │   ├── TimestampableBehavior (createdAt/updatedAt)
+   │   ├── UuidableBehavior (gera UUID)
+   │   ├── password_hash() da senha
+   │   └── status = 'active'
+   ├── generateUuid() se necessário
+   └── Entidade preparada para persistência
+   
+5. 📊 USER REPOSITORY (Data Access)
+   │
+   ├── AbstractRepository->save()
+   ├── EntityManager->persist($entity)
+   ├── EntityManager->flush()
+   └── Retorna UserEntity com ID do banco
+   
+6. ✅ RESPONSE (Success Path)
+   │
+   ├── UserEntity convertida para JSON
+   ├── ApiResponse padronizada
+   └── HTTP 201 Created
+
+🔥 EXCEPTION FLOW (Error Path)
+   │
+   ├── ValidationException → HTTP 422
+   ├── BusinessLogicException → HTTP 400  
+   ├── DatabaseException → HTTP 500
+   └── Middleware converte para JSON padronizado
+----
+
+=== Código Exemplo Completo
+
+[source,php]
+----
+// ✅ 1. CONTROLLER LAYER (Application)
+final class UserController extends AbstractBaseController
+{
+    public function create(ServerRequestInterface $request, 
+                          ResponseInterface $response): ResponseInterface
+    {
+        try {
+            $data = $request->getParsedBody();
+            
+            // Criar Command
+            $command = CreateUserCommand::fromArray($data);
+            
+            // Executar via Service
+            $user = $command->executeWith($this->userService);
+            
+            // Resposta padronizada
+            $apiResponse = $this->success($user, 'Usuário criado com sucesso');
+            $response->getBody()->write($apiResponse->toJson());
+            return $response->withStatus(201);
+            
+        } catch (ValidationException $e) {
+            $apiResponse = $this->error($e->getMessage(), 422, $e->getErrors());
+            $response->getBody()->write($apiResponse->toJson());
+            return $response->withStatus(422);
+        }
+    }
+}
+
+// ✅ 2. DOMAIN SERVICE
+final class UserService implements UserServiceInterface 
+{
+    public function createUser(CreateUserDataDTO $data): UserEntityInterface
+    {
+        // Validações de domínio
+        $this->validateEmail($data->email);
+        $this->validateEmailAvailabilityOrThrow($data->email);
+        $this->validatePassword($data->password);
+        $this->validateRole($data->role);
+
+        // Criação da entidade (Tell, Don't Ask)
+        $user = new UserEntity(
+            $data->name,
+            $data->email, 
+            $data->password,
+            $data->role
+        );
+
+        // Persistência
+        return $this->repository->save($user);
+    }
+}
+
+// ✅ 3. DOMAIN ENTITY
+final class UserEntity implements UserEntityInterface
+{
+    public function __construct(string $name, string $email, 
+                               string $password, string $role = 'user')
+    {
+        // Inicialização de behaviors
+        $this->timestampableBehavior = new TimestampableBehavior();
+        $this->uuidableBehavior = new UuidableBehavior();
+        
+        // Dados básicos
+        $this->name = $name;
+        $this->email = $email;
+        $this->password = password_hash($password, PASSWORD_DEFAULT);
+        $this->role = $role;
+        $this->status = 'active';
+        
+        // Timestamps e UUID
+        $this->createdAt = new DateTime();
+        $this->updatedAt = new DateTime();
+        $this->generateUuid();
+    }
+    
+    // Comportamentos ricos
+    public function activate(): self { /* ... */ }
+    public function canPerform(string $action): bool { /* ... */ }
+    public function needsPasswordChange(): bool { /* ... */ }
+}
+----
+
+== Benefícios da Arquitetura
+
+=== 1. **Testabilidade**
+- Domain Layer **independente** de frameworks
+- Mocks fáceis via interfaces
+- Testes unitários **rápidos** e **confiáveis**
+
+=== 2. **Manutenibilidade**  
+- Lógica de negócio **centralizada** no domínio
+- Mudanças de regras **isoladas** da infraestrutura
+- **Código expressivo** que reflete o negócio
+
+=== 3. **Flexibilidade**
+- Fácil **troca de implementações**
+- **Extensibilidade** via novos services/entities
+- **Evolução** sem quebrar código existente
+
+=== 4. **Performance**
+- Repository pattern com **query builders** otimizados
+- Lazy loading do Doctrine
+- **Caching** em camadas superiores
+
+=== 5. **Consistência**
+- **Padrões uniformes** em toda aplicação
+- **Validação centralizada** de regras
+- **Exception handling** padronizado
+
+== Considerações Finais
+
+### Compatibilidade PHP 7.4
+- **Typed properties**: Todas as propriedades tipadas
+- **Return types**: Todos os métodos com tipos de retorno
+- **Strict types**: `declare(strict_types=1)` em todos os arquivos
+- **Null coalescing**: Uso de `??` onde apropriado
+
+### Próximas Expansões
+- **Domain Events**: Implementar eventos de domínio
+- **Specifications**: Pattern para queries complexas  
+- **Value Objects**: Expandir uso de objetos de valor
+- **Aggregates**: Definir aggregates mais complexos
+
+### Métricas de Qualidade
+- **Cobertura de testes**: Objetivo >90%
+- **Complexidade ciclomática**: Máximo 10 por método
+- **Acoplamento**: Baixo via dependency injection
+- **Coesão**: Alta dentro de cada contexto
+
+---
+
+*Documento gerado automaticamente a partir da análise completa da camada de domínio em 24/09/2025*

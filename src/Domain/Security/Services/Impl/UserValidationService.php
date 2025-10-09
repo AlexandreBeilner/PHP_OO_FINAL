@@ -1,0 +1,82 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Domain\Security\Services\Impl;
+
+use App\Application\Shared\DTOs\Impl\ValidationResult;
+use App\Domain\Common\Exceptions\Impl\ValidationException;
+use App\Domain\Security\Commands\Impl\CreateUserCommand;
+use App\Domain\Security\Commands\Impl\UpdateUserCommand;
+use App\Domain\Security\DTOs\Impl\CreateUserDataDTO;
+use App\Domain\Security\DTOs\Impl\UpdateUserDataDTO;
+use App\Domain\Security\Services\UserValidationServiceInterface;
+use App\Domain\Security\Validators\UserDataValidatorInterface;
+use Psr\Http\Message\ServerRequestInterface;
+
+final class UserValidationService implements UserValidationServiceInterface
+{
+    private UserDataValidatorInterface $userDataValidator;
+
+    public function __construct(UserDataValidatorInterface $userDataValidator)
+    {
+        $this->userDataValidator = $userDataValidator;
+    }
+
+    public function validateCreateUserCommand(ServerRequestInterface $request): CreateUserCommand
+    {
+        $data = $request->getParsedBody();
+
+        $validation = $this->userDataValidator->validateCreateUserData($data);
+        if (! $validation->isValid()) {
+            throw new ValidationException('Dados para criação de usuário inválidos', $validation->getErrors());
+        }
+
+        return CreateUserCommand::fromArray($data);
+    }
+
+    // ✅ COMMAND PATTERN: Retorna Command ao invés de DTO
+
+    public function validateCreateUserRequest(ServerRequestInterface $request): CreateUserDataDTO
+    {
+        $data = $request->getParsedBody();
+
+        $validation = $this->userDataValidator->validateCreateUserData($data);
+        if (! $validation->isValid()) {
+            throw new ValidationException('Dados para criação de usuário inválidos', $validation->getErrors());
+        }
+
+        return CreateUserDataDTO::fromArray($data);
+    }
+
+    public function validateUpdateUserCommand(ServerRequestInterface $request): UpdateUserCommand
+    {
+        $data = $request->getParsedBody();
+
+        $validation = $this->userDataValidator->validateUpdateUserData($data);
+        if (! $validation->isValid()) {
+            throw new ValidationException('Dados para atualização de usuário inválidos', $validation->getErrors());
+        }
+
+        return UpdateUserCommand::fromArray($data);
+    }
+
+    // ✅ COMMAND PATTERN: Retorna UpdateUserCommand ao invés de DTO
+
+    public function validateUpdateUserRequest(ServerRequestInterface $request): UpdateUserDataDTO
+    {
+        $data = $request->getParsedBody();
+
+        $validation = $this->userDataValidator->validateUpdateUserData($data);
+        if (! $validation->isValid()) {
+            throw new ValidationException('Dados para atualização de usuário inválidos', $validation->getErrors());
+        }
+
+        return UpdateUserDataDTO::fromArray($data);
+    }
+
+    public function validateUserId(int $id): ValidationResult
+    {
+        return $this->userDataValidator->validateUserId($id);
+    }
+}
